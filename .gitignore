@@ -1,0 +1,26 @@
+# Dépendances
+node_modules/
+
+# Build
+.next/
+dist/
+
+# Environnement (SECRETS - ne JAMAIS commiter)
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+
+# Prisma
+prisma/migrations/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
