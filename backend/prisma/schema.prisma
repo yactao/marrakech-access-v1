@@ -1,0 +1,298 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  GUEST
+  OWNER
+  ADMIN
+}
+
+enum PropertyType {
+  VILLA
+  RIAD
+  APPARTEMENT
+  DAR
+  SUITE
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  DEPOSIT_PAID
+  FULLY_PAID
+  REFUNDED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  role          UserRole  @default(GUEST)
+  firstName     String
+  lastName      String
+  phone         String?
+  avatar        String?
+  lang          String    @default("fr")
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  properties      Property[]
+  bookingsAsGuest Booking[]       @relation("GuestBookings")
+  reviews         Review[]
+  conversations   Conversation[]
+  ticketsCreated  Ticket[]        @relation("TicketCreator")
+  ticketsAssigned Ticket[]        @relation("TicketAssigned")
+
+  @@map("users")
+}
+
+model Property {
+  id            String         @id @default(cuid())
+  owner         User           @relation(fields: [ownerId], references: [id])
+  ownerId       String
+  name          String
+  slug          String         @unique
+  type          PropertyType
+  description   String         @db.Text
+  shortDesc     String?        @db.VarChar(200)
+
+  district      String
+  address       String?
+  latitude      Float?
+  longitude     Float?
+
+  bedrooms      Int
+  bathrooms     Int
+  capacity      Int
+  surface       Int
+  amenities     Json           @default("[]")
+
+  priceLowSeason  Decimal      @db.Decimal(10,2)
+  priceHighSeason Decimal      @db.Decimal(10,2)
+  currency        String       @default("MAD")
+  minNights       Int          @default(2)
+  cleaningFee     Decimal      @db.Decimal(10,2) @default(0)
+
+  photos        Json           @default("[]")
+  coverPhoto    String?
+
+  icalUrl       String?
+  status        PropertyStatus @default(DRAFT)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  bookings      Booking[]
+  availability  Availability[]
+  reviews       Review[]
+  seasons       Season[]
+
+  @@index([district])
+  @@index([type])
+  @@index([status])
+  @@map("properties")
+}
+
+model Season {
+  id            String   @id @default(cuid())
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId    String
+  name          String
+  startDate     DateTime @db.Date
+  endDate       DateTime @db.Date
+  pricePerNight Decimal  @db.Decimal(10,2)
+  minNights     Int      @default(2)
+
+  @@map("seasons")
+}
+
+model Availability {
+  id          String   @id @default(cuid())
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId  String
+  date        DateTime @db.Date
+  available   Boolean  @default(true)
+  source      String   @default("manual")
+  price       Decimal? @db.Decimal(10,2)
+
+  @@unique([propertyId, date])
+  @@index([propertyId, date])
+  @@map("availability")
+}
+
+model Extra {
+  id          String   @id @default(cuid())
+  name        String
+  category    String
+  description String   @db.Text
+  price       Decimal  @db.Decimal(10,2)
+  priceUnit   String   @default("personne")
+  duration    String?
+  maxPersons  Int?
+  photo       String?
+  available   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  bookingExtras BookingExtra[]
+
+  @@index([category])
+  @@map("extras")
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  property      Property      @relation(fields: [propertyId], references: [id])
+  propertyId    String
+  guest         User          @relation("GuestBookings", fields: [guestId], references: [id])
+  guestId       String
+  checkIn       DateTime      @db.Date
+  checkOut      DateTime      @db.Date
+  nights        Int
+  guestsCount   Int           @default(1)
+  status        BookingStatus @default(PENDING)
+
+  pricePerNight Decimal       @db.Decimal(10,2)
+  subtotal      Decimal       @db.Decimal(10,2)
+  cleaningFee   Decimal       @db.Decimal(10,2) @default(0)
+  extrasTotal   Decimal       @db.Decimal(10,2) @default(0)
+  serviceFee    Decimal       @db.Decimal(10,2) @default(0)
+  totalAmount   Decimal       @db.Decimal(10,2)
+  paymentStatus PaymentStatus @default(PENDING)
+
+  guestMessage  String?       @db.Text
+  internalNotes String?       @db.Text
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  extras        BookingExtra[]
+  review        Review?
+  tickets       Ticket[]
+
+  @@index([propertyId, checkIn, checkOut])
+  @@index([guestId])
+  @@index([status])
+  @@map("bookings")
+}
+
+model BookingExtra {
+  id        String   @id @default(cuid())
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  bookingId String
+  extra     Extra    @relation(fields: [extraId], references: [id])
+  extraId   String
+  quantity  Int      @default(1)
+  date      DateTime @db.Date
+  time      String?
+  unitPrice Decimal  @db.Decimal(10,2)
+  subtotal  Decimal  @db.Decimal(10,2)
+  notes     String?
+
+  @@map("booking_extras")
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  bookingId  String   @unique
+  property   Property @relation(fields: [propertyId], references: [id])
+  propertyId String
+  author     User     @relation(fields: [authorId], references: [id])
+  authorId   String
+  rating     Int
+  comment    String   @db.Text
+  ownerReply String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([propertyId])
+  @@map("reviews")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  context   Json     @default("{}")
+  messages  Json     @default("[]")
+  summary   String?  @db.Text
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Ticket {
+  id         String         @id @default(cuid())
+  booking    Booking?       @relation(fields: [bookingId], references: [id])
+  bookingId  String?
+  creator    User           @relation("TicketCreator", fields: [creatorId], references: [id])
+  creatorId  String
+  assignee   User?          @relation("TicketAssigned", fields: [assigneeId], references: [id])
+  assigneeId String?
+  type       String
+  subject    String
+  priority   TicketPriority @default(MEDIUM)
+  status     TicketStatus   @default(OPEN)
+  messages   Json           @default("[]")
+  resolvedAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([status])
+  @@index([bookingId])
+  @@map("tickets")
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  category  String
+  title     String
+  content   String   @db.Text
+  tags      Json     @default("[]")
+  lang      String   @default("fr")
+  createdAt DateTime @default(now())
+
+  @@index([category])
+  @@fulltext([title, content])
+  @@map("knowledge_base")
+}
