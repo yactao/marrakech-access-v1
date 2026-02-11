@@ -23,8 +23,8 @@ export async function listProperties(req: Request, res: Response): Promise<void>
       status: 'ACTIVE',
     };
 
-    if (district) {
-      where.district = { equals: district as string, mode: 'insensitive' };
+   if (district) {
+      where.district = district as string;
     }
 
     if (type) {
@@ -47,9 +47,9 @@ export async function listProperties(req: Request, res: Response): Promise<void>
 
     if (search) {
       where.OR = [
-        { name: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
-        { district: { contains: search as string, mode: 'insensitive' } },
+        { name: { contains: search as string } },
+        { description: { contains: search as string } },
+        { district: { contains: search as string } },
       ];
     }
 
