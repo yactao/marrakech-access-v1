@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import authRoutes from './routes/auth.routes';
 
 const app = express();
 
@@ -21,6 +22,9 @@ app.get('/api/health', (_req: Request, res: Response) => {
     uptime: Math.floor(process.uptime()) + 's',
   });
 });
+
+// Routes
+app.use('/api/auth', authRoutes);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
