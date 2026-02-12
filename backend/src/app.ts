@@ -3,6 +3,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.routes';
 import propertiesRoutes from './routes/properties.routes';
 import extrasRoutes from './routes/extras.routes';
+import chatRoutes from './routes/chat.routes';
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertiesRoutes);
 app.use('/api/extras', extrasRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
