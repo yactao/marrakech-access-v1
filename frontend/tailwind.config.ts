@@ -32,8 +32,13 @@ const config: Config = {
         'netflix-reveal': 'netflixReveal 2s ease-out forwards',
         'netflix-fade': 'netflixFade 1.5s ease-in-out forwards',
         'logo-shine': 'logoShine 2s ease-in-out forwards',
+        'intro-reveal': 'introReveal 5s ease-out forwards',
       },
       keyframes: {
+        introReveal: {
+          '0%': { opacity: '0', transform: 'translateY(30px) scale(0.9)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
