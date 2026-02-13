@@ -5,6 +5,7 @@ import propertiesRoutes from './routes/properties.routes';
 import extrasRoutes from './routes/extras.routes';
 import chatRoutes from './routes/chat.routes';
 import ownerRoutes from './routes/owner.routes';
+import adminRoutes from './routes/admin.routes';
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.use('/api/properties', propertiesRoutes);
 app.use('/api/extras', extrasRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/owner', ownerRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
