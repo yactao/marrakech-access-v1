@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <!-- Gradient principal du fez (rouge bordeaux) -->
+    <linearGradient id="fezBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#C41E3A"/>
+      <stop offset="30%" style="stop-color:#A01830"/>
+      <stop offset="70%" style="stop-color:#8B1528"/>
+      <stop offset="100%" style="stop-color:#6D1020"/>
+    </linearGradient>
+    
+    <!-- Highlight du fez -->
+    <linearGradient id="fezHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8304A;stop-opacity:0.6"/>
+      <stop offset="100%" style="stop-color:#C41E3A;stop-opacity:0"/>
+    </linearGradient>
+    
+    <!-- Gradient du pompon -->
+    <radialGradient id="pomponGrad" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="60%" style="stop-color:#0d0d1a"/>
+      <stop offset="100%" style="stop-color:#000000"/>
+    </radialGradient>
+    
+    <!-- Ombre portée -->
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+    
+    <!-- Ombre du pompon -->
+    <filter id="pomponShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+    
+    <!-- Brillance -->
+    <linearGradient id="shine" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.15"/>
+      <stop offset="50%" style="stop-color:white;stop-opacity:0.05"/>
+      <stop offset="100%" style="stop-color:white;stop-opacity:0"/>
+    </linearGradient>
+    
+    <!-- Gradient bande dorée -->
+    <linearGradient id="goldBand" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#D4A854"/>
+      <stop offset="40%" style="stop-color:#C8A04A"/>
+      <stop offset="100%" style="stop-color:#B8923E"/>
+    </linearGradient>
+    
+    <!-- Fil du pompon -->
+    <linearGradient id="tassleThread" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#0a0a15"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Ombre au sol -->
+  <ellipse cx="60" cy="105" rx="30" ry="5" fill="#000" opacity="0.15"/>
+  
+  <!-- Corps du fez -->
+  <g filter="url(#shadow)">
+    <!-- Forme principale - tronc de cône avec sommet plat -->
+    <path d="M 30 82 
+             Q 30 80, 32 72 
+             L 38 42 
+             Q 40 32, 45 28 
+             Q 55 22, 60 22 
+             Q 65 22, 75 28 
+             Q 80 32, 82 42 
+             L 88 72 
+             Q 90 80, 90 82 
+             Z" 
+          fill="url(#fezBody)"/>
+    
+    <!-- Sommet plat du fez -->
+    <ellipse cx="60" cy="24" rx="17" ry="5" fill="#A01830"/>
+    <ellipse cx="60" cy="24" rx="17" ry="5" fill="url(#fezHighlight)" opacity="0.5"/>
+    
+    <!-- Highlight côté gauche -->
+    <path d="M 34 78 
+             L 40 42 
+             Q 42 32, 48 27 
+             Q 52 24, 55 24 
+             Q 52 28, 50 35 
+             L 44 70 
+             Q 42 78, 38 82 
+             Z" 
+          fill="url(#shine)"/>
+    
+    <!-- Bande dorée en bas -->
+    <path d="M 29 78 Q 29 82, 30 84 Q 45 90, 60 90 Q 75 90, 90 84 Q 91 82, 91 78 
+             Q 75 84, 60 84 Q 45 84, 29 78 Z" 
+          fill="url(#goldBand)"/>
+    
+    <!-- Reflet sur la bande dorée -->
+    <path d="M 35 79 Q 48 83, 60 83 Q 72 83, 85 79 
+             Q 72 82, 60 82 Q 48 82, 35 79 Z" 
+          fill="white" opacity="0.2"/>
+    
+    <!-- Ligne de détail sur la bande -->
+    <path d="M 32 81 Q 46 87, 60 87 Q 74 87, 88 81" 
+          fill="none" stroke="#B8923E" stroke-width="0.5" opacity="0.6"/>
+    
+    <!-- Texture subtile (lignes verticales) -->
+    <line x1="45" y1="30" x2="40" y2="80" stroke="#8B1528" stroke-width="0.3" opacity="0.3"/>
+    <line x1="55" y1="25" x2="52" y2="82" stroke="#8B1528" stroke-width="0.3" opacity="0.3"/>
+    <line x1="65" y1="25" x2="68" y2="82" stroke="#8B1528" stroke-width="0.3" opacity="0.3"/>
+    <line x1="75" y1="30" x2="80" y2="80" stroke="#8B1528" stroke-width="0.3" opacity="0.3"/>
+  </g>
+  
+  <!-- Pompon et fil -->
+  <g filter="url(#pomponShadow)">
+    <!-- Fil qui pend du sommet -->
+    <path d="M 60 22 
+             Q 62 20, 65 18 
+             Q 70 15, 72 18 
+             Q 75 22, 78 30 
+             Q 80 36, 79 40 
+             Q 78 44, 76 46" 
+          fill="none" stroke="url(#tassleThread)" stroke-width="1.8" stroke-linecap="round"/>
+    
+    <!-- Second fil -->
+    <path d="M 60 22 
+             Q 63 19, 66 17 
+             Q 71 14, 73 17 
+             Q 76 21, 79 29 
+             Q 81 35, 80 39 
+             Q 79 43, 77 45" 
+          fill="none" stroke="#0d0d1a" stroke-width="1" opacity="0.4" stroke-linecap="round"/>
+    
+    <!-- Pompon principal -->
+    <circle cx="76" cy="48" r="6" fill="url(#pomponGrad)"/>
+    
+    <!-- Highlight du pompon -->
+    <circle cx="74" cy="46" r="2.5" fill="white" opacity="0.1"/>
+    
+    <!-- Fils du pompon qui pendent -->
+    <line x1="73" y1="53" x2="71" y2="60" stroke="#0d0d1a" stroke-width="1" stroke-linecap="round" opacity="0.7"/>
+    <line x1="76" y1="54" x2="76" y2="62" stroke="#0d0d1a" stroke-width="1" stroke-linecap="round" opacity="0.7"/>
+    <line x1="79" y1="53" x2="81" y2="60" stroke="#0d0d1a" stroke-width="1" stroke-linecap="round" opacity="0.7"/>
+    <line x1="74" y1="54" x2="73" y2="61" stroke="#1a1a2e" stroke-width="0.6" stroke-linecap="round" opacity="0.4"/>
+    <line x1="78" y1="54" x2="79" y2="61" stroke="#1a1a2e" stroke-width="0.6" stroke-linecap="round" opacity="0.4"/>
+  </g>
+</svg>

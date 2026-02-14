@@ -1,184 +1,293 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+// Messages proactifs selon la page
+const proactiveMessages: Record<string, { delay: number; message: string }> = {
+  '/properties': {
+    delay: 5000,
+    message: 'Besoin d\'aide pour choisir votre hébergement ? Je connais chaque quartier de Marrakech comme ma poche !',
+  },
+  '/extras': {
+    delay: 4000,
+    message: 'Envie d\'une expérience inoubliable ? Laissez-moi vous recommander mes pépites préférées...',
+  },
+  '/investir': {
+    delay: 6000,
+    message: 'Vous souhaitez investir à Marrakech ? Je peux vous guider sur les meilleurs quartiers et rendements.',
+  },
+  '/checkout': {
+    delay: 3000,
+    message: 'Excellent choix ! Si vous avez des demandes spéciales pour votre séjour, n\'hésitez pas.',
+  },
+};
+
+// Suggestions contextuelles selon la page
+const contextSuggestions: Record<string, string[]> = {
+  '/': [
+    'Que faire à Marrakech ?',
+    'Quel quartier choisir ?',
+    'Vos meilleures villas ?',
+  ],
+  '/properties': [
+    'Villa avec piscine privée',
+    'Riad authentique en Médina',
+    'Budget serré, que conseilles-tu ?',
+    'Idéal pour un groupe de 8',
+  ],
+  '/extras': [
+    'Meilleure excursion en famille',
+    'Chef à domicile pour 10 pers',
+    'Activités romantiques en couple',
+    'Que faire quand il pleut ?',
+  ],
+  '/investir': [
+    'Rentabilité locative à Marrakech',
+    'Meilleurs quartiers pour investir',
+    'Comment référencer mon bien ?',
+  ],
+  default: [
+    'Que recommandes-tu ?',
+    'Cherche un bien avec piscine',
+    'Quelles expériences proposez-vous ?',
+    'J\'ai un problème à signaler',
+  ],
+};
+
+// Greetings de Al
+const greetings = [
+  'Marhaba ! 🌟 Je suis **Al**, votre majordome personnel. Comment puis-je rendre votre séjour à Marrakech inoubliable ?',
+  'Ahlan wa sahlan ! 🌙 Al à votre service. Que puis-je faire pour vous aujourd\'hui ?',
+  'Bienvenue ! ✨ Je suis Al, expert de Marrakech depuis toujours. Posez-moi n\'importe quelle question !',
+];
 
 export default function ChatWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [proactiveBubble, setProactiveBubble] = useState('');
+  const [showProactive, setShowProactive] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const [isTypingGreeting, setIsTypingGreeting] = useState(false);
+  const [pulseButton, setPulseButton] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Scroll auto vers le bas
+  // Scroll auto
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, loading]);
 
-  // Focus sur l'input à l'ouverture
+  // Focus input quand on ouvre
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
+    if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  // Message de bienvenue
+  // Message proactif selon la page
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      setMessages([{
-        role: 'assistant',
-        content: 'Bienvenue chez Marrakech Access ! 🌴\n\nJe suis votre Majordome personnel. Je peux vous aider à trouver le bien idéal, organiser des expériences ou répondre à vos questions sur Marrakech.\n\nComment puis-je vous aider ?',
-      }]);
-    }
-  }, [isOpen, messages.length]);
+    if (hasInteracted || isOpen) return;
 
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
+    const pageKey = Object.keys(proactiveMessages).find((key) => pathname.startsWith(key));
+    if (!pageKey) return;
+
+    const { delay, message } = proactiveMessages[pageKey];
+    const timer = setTimeout(() => {
+      setProactiveBubble(message);
+      setShowProactive(true);
+      setTimeout(() => setShowProactive(false), 8000);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [pathname, hasInteracted, isOpen]);
+
+  // Arrêter le pulse après 10s
+  useEffect(() => {
+    const timer = setTimeout(() => setPulseButton(false), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleOpen = () => {
+    setIsOpen(true);
+    setShowProactive(false);
+    setHasInteracted(true);
+    setPulseButton(false);
+
+    if (messages.length === 0) {
+      setIsTypingGreeting(true);
+      setTimeout(() => {
+        const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+        setMessages([{ role: 'assistant', content: greeting }]);
+        setIsTypingGreeting(false);
+      }, 1200);
+    }
+  };
+
+  const getSuggestions = () => {
+    const pageKey = Object.keys(contextSuggestions).find((key) =>
+      key === '/' ? pathname === '/' : pathname.startsWith(key)
+    );
+    return contextSuggestions[pageKey || 'default'] || contextSuggestions['default'];
+  };
+
+  const sendMessage = async (text?: string) => {
+    const messageText = text || input.trim();
+    if (!messageText || loading) return;
 
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setMessages((prev) => [...prev, { role: 'user', content: messageText }]);
     setLoading(true);
 
     try {
-      const res = await api.post('/chat', {
-        message: text,
-        conversationId,
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_URL}/api/chat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ message: messageText, conversationId }),
       });
 
-      setMessages((prev) => [...prev, { role: 'assistant', content: res.data.reply }]);
-      setConversationId(res.data.conversationId);
-    } catch (error) {
+      const data = await res.json();
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+      if (data.conversationId) setConversationId(data.conversationId);
+    } catch {
       setMessages((prev) => [...prev, {
         role: 'assistant',
-        content: 'Désolé, je rencontre un problème technique. Veuillez réessayer dans un instant.',
+        content: 'Oups, petit souci de connexion. Réessayez dans un instant ! 🙏',
       }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+  const renderMessage = (content: string) => {
+    return content
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-gold">$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br/>');
   };
-
-  const suggestions = [
-    'Villa avec piscine pour 6 personnes',
-    'Que faire à Marrakech ?',
-    'Excursions disponibles',
-    'Riad en Médina pour couple',
-  ];
 
   return (
     <>
-      {/* Bouton flottant */}
+      {/* BULLE PROACTIVE */}
+      {showProactive && !isOpen && (
+        <div
+          className="fixed bottom-24 right-6 z-[60] max-w-[280px] cursor-pointer"
+          onClick={handleOpen}
+          style={{ animation: 'bounceIn 0.4s ease-out' }}
+        >
+          <div className="relative bg-dark-light border border-gold/20 rounded-2xl rounded-br-sm p-4 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <img src="/images/fez.svg" alt="Al" className="w-8 h-8 object-contain flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[10px] text-gold font-semibold mb-1">Al — Votre Majordome</p>
+                <p className="text-xs text-white/70 leading-relaxed">{proactiveBubble}</p>
+              </div>
+            </div>
+            <div className="absolute -bottom-2 right-4 w-4 h-4 bg-dark-light border-r border-b border-gold/20 rotate-45"></div>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowProactive(false); }}
+            className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-dark border border-white/10 text-white/40 text-[10px] flex items-center justify-center hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* BOUTON FLOTTANT */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-500 ${
+        onClick={isOpen ? () => setIsOpen(false) : handleOpen}
+        className={`fixed bottom-6 right-6 z-[70] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${
           isOpen
-            ? 'bg-dark-lighter border border-white/10 rotate-0'
-            : 'bg-gold hover:bg-gold-dark hover:scale-110'
+            ? 'bg-dark-lighter border border-white/10'
+            : 'bg-dark-light border border-gold/30 hover:border-gold hover:scale-110'
         }`}
       >
         {isOpen ? (
           <span className="text-white/60 text-xl">✕</span>
         ) : (
-          <span className="text-dark text-2xl">🎩</span>
+          <div className="relative">
+            <img src="/images/fez.svg" alt="Majordome" className={`w-9 h-9 object-contain ${pulseButton ? 'animate-bounce' : ''}`} />
+            {!hasInteracted && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-gold animate-pulse"></span>
+            )}
+          </div>
         )}
       </button>
 
-      {/* Fenêtre de chat */}
-      <div className={`fixed bottom-24 right-6 z-50 w-[360px] md:w-[400px] transition-all duration-500 ${
-        isOpen
-          ? 'opacity-100 translate-y-0 pointer-events-auto'
-          : 'opacity-0 translate-y-4 pointer-events-none'
-      }`}>
-        <div className="bg-dark-light border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col"
-             style={{ height: '550px' }}>
+      {/* FENÊTRE DE CHAT */}
+      {isOpen && (
+        <div className="fixed bottom-24 right-6 z-[70] w-[380px] h-[550px] rounded-2xl overflow-hidden border border-white/10 bg-dark shadow-2xl flex flex-col"
+             style={{ animation: 'slideUp 0.3s ease-out' }}>
 
           {/* Header */}
-          <div className="px-4 py-3 border-b border-white/5 flex items-center gap-3 bg-dark-lighter">
-            <span className="text-2xl">🎩</span>
-            <div>
-              <h3 className="font-playfair text-sm font-semibold text-gold">Majordome</h3>
-              <p className="text-[10px] text-white/30">Votre concierge personnel IA</p>
+          <div className="px-5 py-4 bg-dark-light border-b border-white/5 flex items-center gap-3">
+            <div className="relative">
+              <img src="/images/fez.svg" alt="Al" className="w-10 h-10 object-contain" />
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-dark-light"></span>
             </div>
-            <div className="ml-auto flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="text-[10px] text-white/30">En ligne</span>
+            <div className="flex-1">
+              <h3 className="font-playfair text-sm font-semibold text-white">Al</h3>
+              <p className="text-[10px] text-emerald-400 font-inter">Votre majordome • En ligne</p>
             </div>
+            <span className="text-[10px] text-white/20 font-inter">Propulsé par IA</span>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-gold/15 text-white/90 border border-gold/20'
-                    : 'bg-dark-lighter text-white/70 border border-white/5'
-                }`}>
-                  {msg.content.split('\n').map((line, j) => (
-                    <span key={j}>
-                      {line}
-                      {j < msg.content.split('\n').length - 1 && <br />}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
 
-            {/* Indicateur de frappe */}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-dark-lighter border border-white/5 rounded-lg px-4 py-3 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-gold/40 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                  <span className="w-2 h-2 rounded-full bg-gold/40 animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                  <span className="w-2 h-2 rounded-full bg-gold/40 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+            {isTypingGreeting && (
+              <div className="flex items-end gap-2">
+                <div className="w-7 h-7 rounded-full bg-dark-lighter flex items-center justify-center flex-shrink-0">
+                  <img src="/images/fez.svg" alt="M" className="w-5 h-5 object-contain" />
+                </div>
+                <div className="bg-dark-lighter rounded-2xl rounded-bl-sm px-4 py-3">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-gold/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-2 h-2 bg-gold/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-2 h-2 bg-gold/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Suggestions (uniquement si 1 seul message = bienvenue) */}
-            {messages.length === 1 && !loading && (
-              <div className="space-y-2">
-                <p className="text-[10px] text-white/20 uppercase tracking-wider">Suggestions</p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestions.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setInput(s);
-                        setTimeout(() => {
-                          setInput('');
-                          setMessages((prev) => [...prev, { role: 'user', content: s }]);
-                          setLoading(true);
-                          api.post('/chat', { message: s, conversationId })
-                            .then((res) => {
-                              setMessages((prev) => [...prev, { role: 'assistant', content: res.data.reply }]);
-                              setConversationId(res.data.conversationId);
-                            })
-                            .catch(() => {
-                              setMessages((prev) => [...prev, { role: 'assistant', content: 'Désolé, une erreur est survenue.' }]);
-                            })
-                            .finally(() => setLoading(false));
-                        }, 100);
-                      }}
-                      className="text-xs px-3 py-1.5 rounded-full border border-gold/20 text-gold/60 hover:border-gold/50 hover:text-gold transition-all duration-300"
-                    >
-                      {s}
-                    </button>
-                  ))}
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'items-end gap-2'}`}>
+                {msg.role === 'assistant' && (
+                  <div className="w-7 h-7 rounded-full bg-dark-lighter flex items-center justify-center flex-shrink-0">
+                    <img src="/images/fez.svg" alt="M" className="w-5 h-5 object-contain" />
+                  </div>
+                )}
+                <div
+                  className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-gold/15 text-white/90 rounded-2xl rounded-br-sm border border-gold/10'
+                      : 'bg-dark-lighter text-white/70 rounded-2xl rounded-bl-sm'
+                  }`}
+                  dangerouslySetInnerHTML={{ __html: renderMessage(msg.content) }}
+                />
+              </div>
+            ))}
+
+            {loading && (
+              <div className="flex items-end gap-2">
+                <div className="w-7 h-7 rounded-full bg-dark-lighter flex items-center justify-center flex-shrink-0">
+                  <img src="/images/fez.svg" alt="M" className="w-5 h-5 object-contain" />
+                </div>
+                <div className="bg-dark-lighter rounded-2xl rounded-bl-sm px-4 py-3">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-gold/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-2 h-2 bg-gold/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-2 h-2 bg-gold/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
                 </div>
               </div>
             )}
@@ -186,32 +295,61 @@ export default function ChatWidget() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Suggestions */}
+          {messages.length <= 1 && !loading && !isTypingGreeting && (
+            <div className="px-4 pb-2">
+              <p className="text-[10px] text-white/20 mb-2 font-inter">Suggestions :</p>
+              <div className="flex flex-wrap gap-1.5">
+                {getSuggestions().map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => sendMessage(s)}
+                    className="px-3 py-1.5 rounded-full text-[11px] border border-gold/20 text-gold/60 hover:bg-gold/10 hover:text-gold hover:border-gold/40 transition-all duration-300 font-inter"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Input */}
-          <div className="p-3 border-t border-white/5 bg-dark-lighter">
+          <div className="px-4 py-3 border-t border-white/5 bg-dark-light">
             <div className="flex items-center gap-2">
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Écrivez votre message..."
-                disabled={loading}
-                className="flex-1 bg-dark border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white/80 placeholder:text-white/20 focus:border-gold/40 focus:outline-none transition-colors disabled:opacity-50"
+                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                placeholder="Écrivez à Al..."
+                className="flex-1 bg-dark border border-white/10 rounded-full px-4 py-2.5 text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-gold/40 transition-colors"
               />
               <button
-                onClick={sendMessage}
-                disabled={loading || !input.trim()}
-                className="w-10 h-10 rounded-lg bg-gold hover:bg-gold-dark disabled:bg-white/5 disabled:text-white/10 text-dark flex items-center justify-center transition-all duration-300"
+                onClick={() => sendMessage()}
+                disabled={!input.trim() || loading}
+                className="w-10 h-10 rounded-full bg-gold hover:bg-gold-dark disabled:bg-white/5 disabled:text-white/20 text-dark flex items-center justify-center transition-all duration-300"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      <style jsx>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes bounceIn {
+          0% { opacity: 0; transform: scale(0.8) translateY(10px); }
+          50% { transform: scale(1.02) translateY(-2px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+      `}</style>
     </>
   );
 }

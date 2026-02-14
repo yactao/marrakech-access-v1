@@ -4,6 +4,342 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
+// ===== COMPOSANT MEDIA MANAGER =====
+function MediaManager({ token, apiUrl }: { token: string; apiUrl: string }) {
+  const [mediaData, setMediaData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [selectedProperty, setSelectedProperty] = useState<string>('');
+  const [selectedExtra, setSelectedExtra] = useState<string>('');
+  const [selectedImage, setSelectedImage] = useState<string>('');
+  const [filterFolder, setFilterFolder] = useState<string>('all');
+  const [message, setMessage] = useState('');
+
+ const fetchMedia = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/admin/media`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      console.log('MEDIA DATA:', data);
+      if (data.files && data.properties && data.extras) {
+        setMediaData(data);
+      } else {
+        console.error('Format inattendu:', data);
+      }
+    } catch (e) {
+      console.error('Erreur chargement médias:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchMedia(); }, []);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setMessage('');
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const res = await fetch(`${apiUrl}/admin/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage(`✅ Image uploadée : ${data.path}`);
+        fetchMedia();
+      } else {
+        setMessage(`❌ ${data.error}`);
+      }
+    } catch (err) {
+      setMessage('❌ Erreur upload');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const assignToProperty = async (propertyId: string, imagePath: string, type: 'cover' | 'gallery') => {
+    setMessage('');
+    try {
+      const property = mediaData.properties.find((p: any) => p.id === propertyId);
+      if (!property) return;
+
+      let body: any = {};
+      if (type === 'cover') {
+        body = { coverPhoto: imagePath };
+      } else {
+        const currentPhotos: string[] = property.photos || [];
+        if (!currentPhotos.includes(imagePath)) {
+          body = { photos: [...currentPhotos, imagePath] };
+        } else {
+          setMessage('⚠️ Photo déjà dans la galerie');
+          return;
+        }
+      }
+
+      const res = await fetch(`${apiUrl}/admin/properties/${propertyId}/photos`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        setMessage(`✅ Photo ${type === 'cover' ? 'de couverture' : 'de galerie'} assignée !`);
+        fetchMedia();
+      }
+    } catch (err) {
+      setMessage('❌ Erreur assignation');
+    }
+  };
+
+  const removeFromGallery = async (propertyId: string, imagePath: string) => {
+    const property = mediaData.properties.find((p: any) => p.id === propertyId);
+    if (!property) return;
+
+    const updatedPhotos = (property.photos || []).filter((p: string) => p !== imagePath);
+
+    const res = await fetch(`${apiUrl}/admin/properties/${propertyId}/photos`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photos: updatedPhotos }),
+    });
+
+    if (res.ok) {
+      setMessage('✅ Photo retirée de la galerie');
+      fetchMedia();
+    }
+  };
+
+  const assignToExtra = async (extraId: string, imagePath: string) => {
+    setMessage('');
+    try {
+      const res = await fetch(`${apiUrl}/admin/extras/${extraId}/photo`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photo: imagePath }),
+      });
+
+      if (res.ok) {
+        setMessage('✅ Photo extra assignée !');
+        fetchMedia();
+      }
+    } catch (err) {
+      setMessage('❌ Erreur assignation');
+    }
+  };
+
+  if (loading) return <div className="text-center text-white/30 py-12">Chargement des médias...</div>;
+  if (!mediaData || !mediaData.properties) return <div className="text-center text-white/30 py-12">Erreur de chargement — vérifiez la connexion</div>;
+
+  const filteredFiles = filterFolder === 'all'
+    ? mediaData.files
+    : mediaData.files.filter((f: any) => f.folder === filterFolder);
+
+  return (
+    <div className="space-y-8">
+
+      {/* Message */}
+      {message && (
+        <div className={`p-3 rounded-lg text-sm text-center ${message.startsWith('✅') ? 'bg-green-500/10 border border-green-500/20 text-green-400' : message.startsWith('⚠️') ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400' : 'bg-red-500/10 border border-red-500/20 text-red-400'}`}>
+          {message}
+        </div>
+      )}
+
+      {/* UPLOAD */}
+      <div className="p-6 rounded-lg border border-white/5 bg-dark-light">
+        <h3 className="font-playfair text-lg text-gold font-semibold mb-4">📤 Uploader une image</h3>
+        <div className="flex items-center gap-4">
+          <label className={`cursor-pointer px-6 py-3 rounded-lg text-sm font-semibold transition-colors ${uploading ? 'bg-white/5 text-white/20' : 'bg-gold hover:bg-gold-dark text-dark'}`}>
+            {uploading ? '⏳ Upload en cours...' : '+ Choisir une image'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleUpload} disabled={uploading} className="hidden" />
+          </label>
+          <span className="text-xs text-white/30">JPG, PNG ou WebP • Max 10 MB</span>
+        </div>
+      </div>
+
+      {/* GESTION DES BIENS */}
+      <div className="p-6 rounded-lg border border-white/5 bg-dark-light">
+        <h3 className="font-playfair text-lg text-gold font-semibold mb-4">🏠 Photos des biens</h3>
+
+        <div className="space-y-6">
+          {mediaData.properties.map((property: any) => (
+            <div key={property.id} className="p-4 rounded-lg border border-white/5 bg-dark">
+              <h4 className="text-sm font-semibold text-white mb-3">{property.name}</h4>
+
+              {/* Cover */}
+              <div className="mb-3">
+                <span className="text-[10px] uppercase tracking-wider text-white/30">Photo de couverture</span>
+                <div className="flex items-center gap-3 mt-2">
+                  {property.coverPhoto ? (
+                    <div className="relative w-24 h-16 rounded overflow-hidden border border-gold/30">
+                      <img src={property.coverPhoto} alt="cover" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-24 h-16 rounded bg-dark-lighter border border-white/5 flex items-center justify-center text-white/20 text-xs">
+                      Aucune
+                    </div>
+                  )}
+                  <select
+                    className="flex-1 bg-dark border border-white/10 rounded px-3 py-2 text-xs text-white/60 focus:border-gold/50 focus:outline-none"
+                    value=""
+                    onChange={(e) => { if (e.target.value) assignToProperty(property.id, e.target.value, 'cover'); }}
+                  >
+                    <option value="">Changer la couverture...</option>
+                    {mediaData.files.map((f: any) => (
+                      <option key={f.path} value={f.path}>{f.name} ({f.folder})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Galerie */}
+              <div>
+                <span className="text-[10px] uppercase tracking-wider text-white/30">Galerie ({(property.photos || []).length} photos)</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(property.photos || []).map((photo: string, i: number) => (
+                    <div key={i} className="relative w-20 h-14 rounded overflow-hidden border border-white/10 group/thumb">
+                      <img src={photo} alt={`photo ${i}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => removeFromGallery(property.id, photo)}
+                        className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500/80 text-white text-[8px] hidden group-hover/thumb:flex items-center justify-center"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <select
+                    className="w-20 h-14 bg-dark-lighter border border-dashed border-white/10 rounded text-[10px] text-white/30 focus:border-gold/50 focus:outline-none text-center"
+                    value=""
+                    onChange={(e) => { if (e.target.value) assignToProperty(property.id, e.target.value, 'gallery'); }}
+                  >
+                    <option value="">+ Ajouter</option>
+                    {mediaData.files.map((f: any) => (
+                      <option key={f.path} value={f.path}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* GESTION DES EXTRAS */}
+      <div className="p-6 rounded-lg border border-white/5 bg-dark-light">
+        <h3 className="font-playfair text-lg text-gold font-semibold mb-4">⭐ Photos des extras</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {mediaData.extras.map((extra: any) => (
+            <div key={extra.id} className="p-4 rounded-lg border border-white/5 bg-dark flex items-center gap-3">
+              {extra.photo ? (
+                <div className="w-16 h-12 rounded overflow-hidden border border-white/10 flex-shrink-0">
+                  <img src={extra.photo} alt={extra.name} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-16 h-12 rounded bg-dark-lighter border border-white/5 flex items-center justify-center text-white/20 text-xs flex-shrink-0">
+                  —
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white/70 truncate">{extra.name}</p>
+                <p className="text-[10px] text-white/30">{extra.category}</p>
+              </div>
+              <select
+                className="w-32 bg-dark border border-white/10 rounded px-2 py-1.5 text-[10px] text-white/50 focus:border-gold/50 focus:outline-none"
+                value=""
+                onChange={(e) => { if (e.target.value) assignToExtra(extra.id, e.target.value); }}
+              >
+                <option value="">Changer...</option>
+                {mediaData.files.map((f: any) => (
+                  <option key={f.path} value={f.path}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* BIBLIOTHÈQUE D'IMAGES */}
+      <div className="p-6 rounded-lg border border-white/5 bg-dark-light">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-playfair text-lg text-gold font-semibold">📁 Bibliothèque ({mediaData.files.length} images)</h3>
+          <div className="flex gap-2">
+            {['all', 'uploads', 'images', 'biens', 'extras'].map((folder) => (
+              <button key={folder} onClick={() => setFilterFolder(folder)}
+                className={`px-3 py-1 rounded text-xs transition-colors ${filterFolder === folder ? 'bg-gold/15 text-gold border border-gold/30' : 'text-white/30 border border-white/5 hover:border-white/10'}`}>
+                {folder === 'all' ? 'Tout' : folder}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+          {filteredFiles.map((file: any) => (
+            <div key={file.path}
+              onClick={() => setSelectedImage(selectedImage === file.path ? '' : file.path)}
+              className={`relative aspect-square rounded overflow-hidden cursor-pointer border-2 transition-all ${selectedImage === file.path ? 'border-gold scale-95' : 'border-transparent hover:border-white/20'}`}>
+              <img src={file.path} alt={file.name} className="w-full h-full object-cover" />
+              <div className="absolute bottom-0 left-0 right-0 bg-dark/80 px-1 py-0.5">
+                <p className="text-[8px] text-white/40 truncate">{file.name}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {selectedImage && (
+          <div className="mt-4 p-4 rounded-lg bg-dark border border-gold/20">
+            <div className="flex items-center gap-4">
+              <img src={selectedImage} alt="selected" className="w-24 h-16 rounded object-cover" />
+              <div className="flex-1 space-y-2">
+                <p className="text-xs text-white/60">{selectedImage}</p>
+                <div className="flex gap-2">
+                  <select value={selectedProperty} onChange={(e) => setSelectedProperty(e.target.value)}
+                    className="flex-1 bg-dark border border-white/10 rounded px-2 py-1.5 text-xs text-white/50 focus:outline-none">
+                    <option value="">Assigner à un bien...</option>
+                    {mediaData.properties.map((p: any) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  {selectedProperty && (
+                    <div className="flex gap-1">
+                      <button onClick={() => { assignToProperty(selectedProperty, selectedImage, 'cover'); setSelectedProperty(''); }}
+                        className="px-2 py-1 rounded bg-gold/20 text-gold text-[10px] hover:bg-gold/30">Couverture</button>
+                      <button onClick={() => { assignToProperty(selectedProperty, selectedImage, 'gallery'); setSelectedProperty(''); }}
+                        className="px-2 py-1 rounded bg-gold/10 text-gold/70 text-[10px] hover:bg-gold/20">Galerie</button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <select value={selectedExtra} onChange={(e) => setSelectedExtra(e.target.value)}
+                    className="flex-1 bg-dark border border-white/10 rounded px-2 py-1.5 text-xs text-white/50 focus:outline-none">
+                    <option value="">Assigner à un extra...</option>
+                    {mediaData.extras.map((e: any) => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                  </select>
+                  {selectedExtra && (
+                    <button onClick={() => { assignToExtra(selectedExtra, selectedImage); setSelectedExtra(''); }}
+                      className="px-3 py-1 rounded bg-gold/20 text-gold text-[10px] hover:bg-gold/30">Assigner</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ===== COMPOSANT ADMIN PAGE =====
+
 const statusColors: Record<string, string> = {
   DRAFT: 'text-white/40 bg-white/5 border-white/10',
   PENDING: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
@@ -14,19 +350,24 @@ const statusColors: Record<string, string> = {
   CHECKED_IN: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
   CHECKED_OUT: 'text-white/40 bg-white/5 border-white/10',
   CANCELLED: 'text-red-400 bg-red-400/10 border-red-400/20',
-  OPEN: 'text-red-400 bg-red-400/10 border-red-400/20',
-  IN_PROGRESS: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  OPEN: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  IN_PROGRESS: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
   RESOLVED: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
   CLOSED: 'text-white/40 bg-white/5 border-white/10',
+  LOW: 'text-white/40 bg-white/5 border-white/10',
+  MEDIUM: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  HIGH: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
+  URGENT: 'text-red-400 bg-red-400/10 border-red-400/20',
 };
 
-type Tab = 'overview' | 'properties' | 'bookings' | 'users' | 'tickets';
+type Tab = 'overview' | 'properties' | 'bookings' | 'users' | 'tickets' | 'medias';
 
 export default function AdminPage() {
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [authToken, setAuthToken] = useState<string>('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -34,16 +375,19 @@ export default function AdminPage() {
     if (!token || !user) { router.push('/login'); return; }
 
     const parsed = JSON.parse(user);
-    if (parsed.role !== 'ADMIN') { router.push('/'); return; }
+    if (parsed.role !== 'ADMIN') { router.push('/login'); return; }
 
-    api.get('/admin/stats')
+    setAuthToken(token);
+    console.log('AUTH TOKEN SET:', token?.substring(0, 20) + '...');
+
+    api.get('/admin/stats', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then((res) => setData(res.data))
-      .catch((err) => {
-        if (err.response?.status === 401 || err.response?.status === 403) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          router.push('/login');
-        }
+      .catch(() => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        router.push('/login');
       })
       .finally(() => setLoading(false));
   }, [router]);
@@ -101,6 +445,7 @@ export default function AdminPage() {
     { id: 'bookings', label: 'Réservations', icon: '📅' },
     { id: 'users', label: 'Utilisateurs', icon: '👥' },
     { id: 'tickets', label: 'Tickets', icon: '🎫' },
+    { id: 'medias', label: 'Médias', icon: '🖼️' },
   ];
 
   return (
@@ -401,6 +746,12 @@ export default function AdminPage() {
             )}
           </div>
         )}
+
+        {/* MÉDIAS */}
+        {activeTab === 'medias' && authToken && (
+          <MediaManager token={authToken} apiUrl={(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000') + '/api'} />
+        )}
+
       </div>
     </main>
   );

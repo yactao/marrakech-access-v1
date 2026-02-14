@@ -3,164 +3,161 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
-// ==========================================
-// INTRO STYLE ORIGINAL (Logo + Slide Up)
-// ==========================================
-function IntroOverlay({ onComplete }: { onComplete: () => void }) {
-  const [phase, setPhase] = useState<'visible' | 'exiting' | 'done'>('visible');
+export default function HomePage() {
+  const [introVisible, setIntroVisible] = useState(true);
+  const [introFading, setIntroFading] = useState(false);
+  const [hoveredSide, setHoveredSide] = useState<'left' | 'right' | null>(null);
 
   useEffect(() => {
-    // Après 3s, lance l'animation de sortie
-    const exitTimer = setTimeout(() => setPhase('exiting'), 3000);
-    // Après 4.5s, supprime l'overlay
-    const doneTimer = setTimeout(() => {
-      setPhase('done');
-      onComplete();
-    }, 4500);
-
-    return () => {
-      clearTimeout(exitTimer);
-      clearTimeout(doneTimer);
-    };
-  }, [onComplete]);
-
-  if (phase === 'done') return null;
-
-  return (
-    <div
-      className={`fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center transition-all duration-[1500ms] ease-in-out ${
-        phase === 'exiting' ? 'opacity-0 -translate-y-full' : 'opacity-100 translate-y-0'
-      }`}
-      style={{ pointerEvents: 'none' }}
-    >
-      {/* Logo réel */}
-      <div
-        className="w-36 h-36 mb-6 opacity-0 animate-intro-reveal"
-        style={{ animationDelay: '0s' }}
-      >
-        <img
-          src="/images/logo.jpg"
-          alt="Marrakech Access"
-          className="w-full h-full object-contain"
-        />
-      </div>
-
-      {/* Nom */}
-      <h1
-        className="font-playfair text-4xl md:text-5xl text-gold uppercase tracking-[5px] opacity-0 animate-intro-reveal"
-        style={{ animationDelay: '0.3s' }}
-      >
-        Marrakech Access
-      </h1>
-
-      {/* Slogan */}
-      <p
-        className="mt-4 text-white/40 text-sm tracking-[3px] uppercase opacity-0 animate-intro-reveal"
-        style={{ animationDelay: '0.8s' }}
-      >
-        L&apos;Art de vivre, simplement.
-      </p>
-    </div>
-  );
-}
-
-// ==========================================
-// LANDING PAGE — SPLIT SCREEN
-// ==========================================
-export default function Home() {
-  const [showIntro, setShowIntro] = useState(true);
-  const [contentReady, setContentReady] = useState(false);
-
-    const handleIntroComplete = () => {
-    setShowIntro(false);
-    setContentReady(true);
-  };
+    const fadeTimer = setTimeout(() => setIntroFading(true), 2800);
+    const hideTimer = setTimeout(() => setIntroVisible(false), 3600);
+    return () => { clearTimeout(fadeTimer); clearTimeout(hideTimer); };
+  }, []);
 
   return (
     <>
-      {showIntro && <IntroOverlay onComplete={handleIntroComplete} />}
+     {/* ====== INTRO OVERLAY ====== */}
+      {introVisible && (
+        <div
+          className={`fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center transition-all duration-[1500ms] ${
+            introFading ? 'opacity-0 -translate-y-full' : 'opacity-100 translate-y-0'
+          }`}
+          style={{ pointerEvents: 'none' }}
+        >
+          {/* Logo rond avec bordure dorée */}
+          <div
+            className="w-[120px] h-[120px] rounded-full border-2 border-gold p-[5px] mb-6 opacity-0"
+            style={{ animation: 'introReveal 2s ease-out forwards' }}
+          >
+            <img
+              src="/images/logo.jpg"
+              alt="Marrakech Access"
+              className="w-full h-full object-cover rounded-full"
+            />
+          </div>
 
-      {/* SPLIT SCREEN PLEIN ÉCRAN */}
-      <main className={`h-screen w-screen overflow-hidden transition-opacity duration-1000 ${
-        contentReady ? 'opacity-100' : 'opacity-0'
-      }`}>
+          {/* Titre */}
+          <h1
+            className="font-playfair text-[3rem] text-gold uppercase tracking-[5px] opacity-0"
+            style={{ animation: 'introReveal 2s ease-out 0.3s forwards' }}
+          >
+            Marrakech Access
+          </h1>
 
-        {/* Brand header */}
-        <div className="absolute top-6 w-full text-center z-10 pointer-events-none">
-          <span className="font-playfair text-white text-sm md:text-base tracking-[3px] drop-shadow-lg">
-            MARRAKECH ACCESS
-          </span>
+          {/* Slogan */}
+          <p
+            className="text-[0.9rem] text-[#666] tracking-[3px] mt-4 uppercase opacity-0"
+            style={{ animation: 'introReveal 2s ease-out 0.8s forwards' }}
+          >
+            L&apos;Art de vivre, simplement
+          </p>
         </div>
+      )}
 
-        {/* Split container */}
-        <div className="flex h-full">
+      {/* ====== SPLIT SCREEN ====== */}
+      <main className="h-screen flex flex-col md:flex-row overflow-hidden">
 
-          {/* SÉJOURNER */}
-          <Link href="/properties"
-                className="group flex-1 relative flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-[600ms] hover:flex-[1.5] overflow-hidden border-r border-gold/30">
-            
-            {/* Background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-dark via-dark-light to-dark-lighter"></div>
-            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-500"
-                 style={{
-                   backgroundImage: `url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C8A97E' fill-opacity='0.15'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10s-10-4.477-10-10 4.477-10 10-10zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10S0 25.523 0 20s4.477-10 10-10z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                 }}>
-            </div>
+        {/* SÉJOURNER */}
+        <Link href="/properties"
+          onMouseEnter={() => setHoveredSide('left')}
+          onMouseLeave={() => setHoveredSide(null)}
+          className={`relative flex-1 flex items-center justify-center overflow-hidden transition-all duration-700 ease-out ${
+            hoveredSide === 'left' ? 'md:flex-[1.6]' : hoveredSide === 'right' ? 'md:flex-[0.7]' : 'md:flex-1'
+          }`}
+        >
+          {/* Image de fond */}
+          <img
+            src="/images/sejourner.png"
+            alt="Séjourner à Marrakech"
+            className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${
+              hoveredSide === 'left' ? 'scale-105 brightness-80' : 'scale-100 brightness-[0.3]'
+            }`}
+          />
 
-            {/* Overlay sombre */}
-            <div className="absolute inset-0 bg-black/60 group-hover:bg-black/30 transition-all duration-500"></div>
+          {/* Overlay gradient */}
+          <div className="absolute inset-0 bg-gradient-to-t from-dark/70 via-dark/40 to-dark/60 z-10"></div>
 
-            {/* Contenu */}
-            <div className="relative z-[2] transform translate-y-5 group-hover:translate-y-0 transition-transform duration-500 px-5">
-              <span className="text-5xl md:text-6xl block mb-6">🏡</span>
-              <h2 className="font-playfair text-4xl md:text-5xl lg:text-6xl text-white font-bold drop-shadow-xl">
+          {/* Contenu */}
+          <div className="relative z-20 text-center px-8">
+            <div className={`transition-all duration-500 ${hoveredSide === 'left' ? 'scale-100 opacity-100' : 'scale-95 opacity-80'}`}>
+              
+              {/* Petite ligne dorée */}
+              <div className="w-10 h-[1px] bg-gold/50 mx-auto mb-6"></div>
+
+              <h2 className="font-playfair text-4xl md:text-5xl lg:text-6xl font-bold text-white tracking-tight">
                 Séjourner
               </h2>
-              <p className="mt-3 text-white/60 text-sm md:text-base">
-                Villas, Riads & Expériences Uniques
+              
+              <p className="mt-4 text-white/50 font-inter text-sm md:text-base max-w-sm mx-auto leading-relaxed">
+                Villas privées, riads authentiques & expériences sur mesure
               </p>
-              <span className="inline-block mt-6 px-8 py-3 border border-white/40 text-white text-xs uppercase tracking-[2px] backdrop-blur-sm bg-black/20 group-hover:bg-gold group-hover:border-gold group-hover:text-dark transition-all duration-300">
-                Réserver mon séjour
-              </span>
+
+              <div className={`mt-8 transition-all duration-500 ${hoveredSide === 'left' ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                <span className="inline-block px-8 py-3 border border-gold/50 text-gold font-inter text-xs tracking-[0.2em] uppercase hover:bg-gold hover:text-dark transition-all duration-300">
+                  Découvrir nos biens
+                </span>
+              </div>
             </div>
-          </Link>
+          </div>
 
-          {/* INVESTIR */}
-          <Link href="/investir"
-                className="group flex-1 relative flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-[600ms] hover:flex-[1.5] overflow-hidden">
-            
-            {/* Background */}
-            <div className="absolute inset-0 bg-gradient-to-bl from-dark via-dark-light to-dark-lighter"></div>
-            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-500"
-                 style={{
-                   backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C8A97E' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                 }}>
-            </div>
+          {/* Ligne de séparation verticale */}
+          <div className="hidden md:block absolute right-0 top-[15%] bottom-[15%] w-[1px] bg-white/10 z-30"></div>
+        </Link>
 
-            {/* Overlay sombre */}
-            <div className="absolute inset-0 bg-black/60 group-hover:bg-black/30 transition-all duration-500"></div>
+        {/* INVESTIR */}
+        <Link href="/investir"
+          onMouseEnter={() => setHoveredSide('right')}
+          onMouseLeave={() => setHoveredSide(null)}
+          className={`relative flex-1 flex items-center justify-center overflow-hidden transition-all duration-700 ease-out ${
+            hoveredSide === 'right' ? 'md:flex-[1.6]' : hoveredSide === 'left' ? 'md:flex-[0.7]' : 'md:flex-1'
+          }`}
+        >
+          {/* Image de fond */}
+          <img
+            src="/images/investir.png"
+            alt="Investir à Marrakech"
+            className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${
+              hoveredSide === 'right' ? 'scale-105 brightness-80' : 'scale-100 brightness-[0.3]'
+            }`}
+          />
 
-            {/* Contenu */}
-            <div className="relative z-[2] transform translate-y-5 group-hover:translate-y-0 transition-transform duration-500 px-5">
-              <span className="text-5xl md:text-6xl block mb-6">📈</span>
-              <h2 className="font-playfair text-4xl md:text-5xl lg:text-6xl text-white font-bold drop-shadow-xl">
+          {/* Overlay gradient */}
+          <div className="absolute inset-0 bg-gradient-to-t from-dark/70 via-dark/40 to-dark/60 z-10"></div>
+
+          {/* Contenu */}
+          <div className="relative z-20 text-center px-8">
+            <div className={`transition-all duration-500 ${hoveredSide === 'right' ? 'scale-100 opacity-100' : 'scale-95 opacity-80'}`}>
+              
+              <div className="w-10 h-[1px] bg-gold/50 mx-auto mb-6"></div>
+
+              <h2 className="font-playfair text-4xl md:text-5xl lg:text-6xl font-bold text-white tracking-tight">
                 Investir
               </h2>
-              <p className="mt-3 text-white/60 text-sm md:text-base">
-                Gestion Locative & Conciergerie Privée
+              
+              <p className="mt-4 text-white/50 font-inter text-sm md:text-base max-w-sm mx-auto leading-relaxed">
+                Gestion locative premium & conciergerie privée
               </p>
-              <span className="inline-block mt-6 px-8 py-3 border border-white/40 text-white text-xs uppercase tracking-[2px] backdrop-blur-sm bg-black/20 group-hover:bg-gold group-hover:border-gold group-hover:text-dark transition-all duration-300">
-                Espace Propriétaire
-              </span>
-            </div>
-          </Link>
-        </div>
 
-        {/* Footer links */}
-        <div className="absolute bottom-5 w-full text-center z-10">
-          <Link href="/login" className="text-white/30 text-xs mx-3 hover:text-gold transition-colors">Espace Admin</Link>
-          <span className="text-white/10">|</span>
-          <Link href="#" className="text-white/30 text-xs mx-3 hover:text-gold transition-colors">Contact</Link>
+              <div className={`mt-8 transition-all duration-500 ${hoveredSide === 'right' ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                <span className="inline-block px-8 py-3 border border-gold/50 text-gold font-inter text-xs tracking-[0.2em] uppercase hover:bg-gold hover:text-dark transition-all duration-300">
+                  Espace propriétaire
+                </span>
+              </div>
+            </div>
+          </div>
+        </Link>
+
+
+
+        {/* FOOTER FLOTTANT */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center py-6 pointer-events-none">
+          <div className="flex items-center gap-8 text-[10px] font-inter tracking-[0.2em] uppercase text-white/20">
+            <span>Marrakech</span>
+            <span className="w-1 h-1 rounded-full bg-gold/40"></span>
+            <span>Conciergerie de luxe</span>
+            <span className="w-1 h-1 rounded-full bg-gold/40"></span>
+            <span>Since 2024</span>
+          </div>
         </div>
       </main>
     </>

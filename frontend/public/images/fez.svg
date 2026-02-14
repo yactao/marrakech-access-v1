@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="fezMain" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9B1B30"/>
+      <stop offset="25%" style="stop-color:#7A1528"/>
+      <stop offset="50%" style="stop-color:#6B1224"/>
+      <stop offset="75%" style="stop-color:#5A0F1E"/>
+      <stop offset="100%" style="stop-color:#4A0C18"/>
+    </linearGradient>
+    <linearGradient id="fezShine" x1="0%" y1="0%" x2="100%" y2="80%">
+      <stop offset="0%" style="stop-color:#D4354E;stop-opacity:0.85"/>
+      <stop offset="25%" style="stop-color:#B42840;stop-opacity:0.5"/>
+      <stop offset="55%" style="stop-color:#8B1B30;stop-opacity:0.1"/>
+      <stop offset="100%" style="stop-color:#6B1224;stop-opacity:0"/>
+    </linearGradient>
+    <radialGradient id="topGrad" cx="45%" cy="50%" r="55%">
+      <stop offset="0%" style="stop-color:#A82040"/>
+      <stop offset="60%" style="stop-color:#7A1528"/>
+      <stop offset="100%" style="stop-color:#5A0F1E"/>
+    </radialGradient>
+    <linearGradient id="goldPompon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8C55A"/>
+      <stop offset="30%" style="stop-color:#D4A840"/>
+      <stop offset="60%" style="stop-color:#B8922E"/>
+      <stop offset="100%" style="stop-color:#9A7A22"/>
+    </linearGradient>
+    <linearGradient id="goldHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F5DC80;stop-opacity:0.8"/>
+      <stop offset="100%" style="stop-color:#D4A840;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="goldThread" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8C55A"/>
+      <stop offset="50%" style="stop-color:#C8A040"/>
+      <stop offset="100%" style="stop-color:#A88830"/>
+    </linearGradient>
+    <linearGradient id="outline" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3A0810"/>
+      <stop offset="100%" style="stop-color:#2A060C"/>
+    </linearGradient>
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#A82040"/>
+      <stop offset="50%" style="stop-color:#7A1528"/>
+      <stop offset="100%" style="stop-color:#4A0C18"/>
+    </linearGradient>
+    <linearGradient id="goldOutline" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F0D060"/>
+      <stop offset="100%" style="stop-color:#A08020"/>
+    </linearGradient>
+    <filter id="dropShadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#dropShadow)">
+
+    <!-- CORPS DU FEZ - Forme cylindrique / carrée -->
+    <!-- Contour sombre -->
+    <path d="M 25 88
+             L 25 85
+             L 28 40
+             C 28 34, 32 28, 40 25
+             C 46 22, 54 21, 60 21
+             C 66 21, 74 22, 80 25
+             C 88 28, 92 34, 92 40
+             L 95 85
+             L 95 88
+             C 95 92, 88 95, 60 95
+             C 32 95, 25 92, 25 88 Z"
+          fill="url(#outline)" />
+
+    <!-- Corps principal -->
+    <path d="M 27 87
+             L 27 84
+             L 30 40
+             C 30 35, 34 29, 41 26
+             C 47 23, 54 22, 60 22
+             C 66 22, 73 23, 79 26
+             C 86 29, 90 35, 90 40
+             L 93 84
+             L 93 87
+             C 93 90, 87 93, 60 93
+             C 33 93, 27 90, 27 87 Z"
+          fill="url(#fezMain)" />
+
+    <!-- Highlight brillant côté gauche -->
+    <path d="M 29 85
+             L 32 42
+             C 32 36, 35 30, 42 27
+             C 46 25, 50 24, 54 23
+             C 50 26, 46 30, 44 36
+             L 40 42
+             L 36 84
+             C 34 88, 30 87, 29 85 Z"
+          fill="url(#fezShine)" />
+
+    <!-- Reflet spéculaire fin -->
+    <path d="M 34 78
+             L 36 48
+             C 36 42, 38 36, 44 30
+             C 42 34, 40 40, 39 46
+             L 37 74
+             C 36 78, 35 80, 34 78 Z"
+          fill="white" opacity="0.15" />
+
+    <!-- Ombre côté droit -->
+    <path d="M 88 84
+             L 86 42
+             C 86 38, 84 34, 80 30
+             C 84 34, 88 40, 88 44
+             L 91 84
+             C 91 86, 90 88, 88 84 Z"
+          fill="#2A060C" opacity="0.3" />
+
+    <!-- SOMMET PLAT - plus large et plat -->
+    <ellipse cx="60" cy="23" rx="22" ry="5.5" fill="url(#topGrad)" />
+    <ellipse cx="55" cy="22" rx="10" ry="2.5" fill="white" opacity="0.07" />
+
+    <!-- BORD INFÉRIEUR -->
+    <path d="M 26 86
+             C 26 88, 28 91, 60 91
+             C 92 91, 94 88, 94 86
+             C 94 89, 91 94, 60 94
+             C 29 94, 26 89, 26 86 Z"
+          fill="url(#rimGrad)" />
+    <path d="M 33 87.5 C 44 90, 54 90.5, 60 90.5 C 66 90.5, 76 90, 87 87.5"
+          fill="none" stroke="white" stroke-width="0.6" opacity="0.15" />
+
+    <!-- ===== FIL DORÉ ===== -->
+    <path d="M 60 21
+             C 63 19, 68 17, 72 16.5
+             C 76 16, 80 18, 82 22
+             C 84 27, 84 34, 83 40
+             C 82 46, 79 52, 77 56"
+          fill="none" stroke="url(#goldOutline)" stroke-width="3.5" stroke-linecap="round" />
+    <path d="M 60 21
+             C 63 19, 68 17, 72 16.5
+             C 76 16, 80 18, 82 22
+             C 84 27, 84 34, 83 40
+             C 82 46, 79 52, 77 56"
+          fill="none" stroke="url(#goldThread)" stroke-width="2.2" stroke-linecap="round" />
+    <path d="M 61 20.5
+             C 64 18.5, 69 17, 72 16.5
+             C 75 16, 78 17, 80 20"
+          fill="none" stroke="#F5DC80" stroke-width="0.8" opacity="0.5" stroke-linecap="round" />
+
+    <!-- ===== POMPON ===== -->
+    <!-- Noeud -->
+    <ellipse cx="77" cy="56" rx="3.5" ry="3" fill="url(#goldOutline)" />
+    <ellipse cx="77" cy="56" rx="2.8" ry="2.3" fill="url(#goldPompon)" />
+    <ellipse cx="76" cy="55" rx="1.2" ry="0.8" fill="#F5DC80" opacity="0.5" />
+
+    <!-- Gland du pompon -->
+    <path d="M 72 58
+             C 72 57, 74 56.5, 77 56.5
+             C 80 56.5, 82 57, 82 58
+             C 83 61, 83 65, 82 69
+             C 81 72, 79 74, 77 75
+             C 75 74, 73 72, 72 69
+             C 71 65, 71 61, 72 58 Z"
+          fill="url(#goldOutline)" />
+    <path d="M 73 58.5
+             C 73 57.5, 75 57, 77 57
+             C 79 57, 81 57.5, 81 58.5
+             C 82 61.5, 82 64.5, 81 68
+             C 80 71, 78.5 72.5, 77 73
+             C 75.5 72.5, 74 71, 73 68
+             C 72 64.5, 72 61.5, 73 58.5 Z"
+          fill="url(#goldPompon)" />
+
+    <!-- Lignes sur le pompon -->
+    <line x1="75" y1="58" x2="74.5" y2="72" stroke="#A08020" stroke-width="0.5" opacity="0.4" />
+    <line x1="77" y1="57" x2="77" y2="73" stroke="#A08020" stroke-width="0.5" opacity="0.4" />
+    <line x1="79" y1="58" x2="79.5" y2="72" stroke="#A08020" stroke-width="0.5" opacity="0.4" />
+
+    <!-- Highlight pompon -->
+    <path d="M 74 59
+             C 74 58, 75 57.5, 76 58
+             C 76.5 59, 76 62, 75 66
+             C 74 69, 73.5 68, 73 65
+             C 72.5 62, 73 60, 74 59 Z"
+          fill="url(#goldHighlight)" opacity="0.6" />
+
+  </g>
+</svg>
