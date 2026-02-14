@@ -109,10 +109,16 @@ export default function ExtrasPage() {
                 onClick={() => setSelectedExtra(extra)}
                 className="group cursor-pointer rounded-lg border border-white/5 hover:border-gold/20 bg-dark-light p-6 transition-all duration-500 hover:bg-dark-lighter"
               >
-                {/* Catégorie */}
-                <span className="text-2xl mb-3 block">
-                  {categoryIcons[extra.category] || '✨'}
-                </span>
+               {/* Image ou icône */}
+                {extra.photo ? (
+                  <div className="h-32 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-lg">
+                    <img src={extra.photo} alt={extra.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                  </div>
+                ) : (
+                  <span className="text-2xl mb-3 block">
+                    {categoryIcons[extra.category] || '✨'}
+                  </span>
+                )}
 
                 {/* Nom */}
                 <h3 className="font-playfair text-lg font-semibold text-white group-hover:text-gold transition-colors duration-300">

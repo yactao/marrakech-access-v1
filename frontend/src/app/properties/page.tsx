@@ -38,7 +38,8 @@ function PropertiesContent() {
       if (filters.maxBudget) params.maxBudget = filters.maxBudget;
       if (filters.minCapacity) params.minCapacity = filters.minCapacity;
 
-      const res = await api.get('/properties', { params });
+     const res = await api.get('/properties', { params });
+      console.log('FIRST PROPERTY:', JSON.stringify(res.data.properties[0]));
       setProperties(res.data.properties);
       setTotal(res.data.pagination.total);
     } catch (error) {
@@ -111,9 +112,10 @@ function PropertiesContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {properties.map((property) => (
-              <PropertyCard key={property.id} property={property} />
-            ))}
+            {properties.map((property) => {
+              console.log('PROPERTY:', property.name, property.coverPhoto);
+              return <PropertyCard key={property.id} property={property} />;
+            })}
           </div>
         )}
       </div>

@@ -3,6 +3,7 @@ import "./globals.css";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import ChatWidget from "@/components/chat/ChatWidget";
+import { CartProvider } from "@/lib/CartContext";
 
 export const metadata: Metadata = {
   title: "Marrakech Access — Conciergerie de luxe",
@@ -17,10 +18,12 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className="antialiased">
-        <Header />
-        {children}
-        <Footer />
-        <ChatWidget />
+        <CartProvider>
+          <Header />
+          {children}
+          <Footer />
+          <ChatWidget />
+        </CartProvider>
       </body>
     </html>
   );

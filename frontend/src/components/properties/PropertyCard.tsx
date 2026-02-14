@@ -21,11 +21,7 @@ interface PropertyCardProps {
 }
 
 const typeLabels: Record<string, string> = {
-  VILLA: 'Villa',
-  RIAD: 'Riad',
-  APPARTEMENT: 'Appartement',
-  DAR: 'Dar',
-  SUITE: 'Suite',
+  VILLA: 'Villa', RIAD: 'Riad', APPARTEMENT: 'Appartement', DAR: 'Dar', SUITE: 'Suite',
 };
 
 export default function PropertyCard({ property }: PropertyCardProps) {
@@ -38,11 +34,18 @@ export default function PropertyCard({ property }: PropertyCardProps) {
       {/* Image */}
       <div className="relative h-52 bg-dark-lighter overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-dark/80 via-transparent to-transparent z-10"></div>
-        
-        {/* Placeholder image */}
-        <div className="w-full h-full flex items-center justify-center text-white/10 text-6xl group-hover:scale-105 transition-transform duration-700">
-          {property.type === 'VILLA' ? '🏡' : property.type === 'RIAD' ? '🕌' : property.type === 'APPARTEMENT' ? '🏢' : property.type === 'DAR' ? '🏠' : '✨'}
-        </div>
+
+        {property.coverPhoto ? (
+          <img
+            src={property.coverPhoto}
+            alt={property.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-white/10 text-6xl group-hover:scale-105 transition-transform duration-700">
+            {property.type === 'VILLA' ? '🏡' : property.type === 'RIAD' ? '🕌' : property.type === 'APPARTEMENT' ? '🏢' : property.type === 'DAR' ? '🏠' : '✨'}
+          </div>
+        )}
 
         {/* Badge type */}
         <span className="absolute top-3 left-3 z-20 px-2.5 py-1 bg-dark/80 backdrop-blur-sm rounded text-[10px] font-inter tracking-wider text-gold uppercase">
@@ -89,7 +92,7 @@ export default function PropertyCard({ property }: PropertyCardProps) {
             <span className="font-playfair text-lg font-bold text-gold">{price.toLocaleString()}</span>
             <span className="text-xs text-white/30 ml-1">{property.currency}/nuit</span>
           </div>
-          <span className="text-[10px] text-white/20 font-inter">min. nuit dispo</span>
+          <span className="text-[10px] text-gold/40 group-hover:text-gold transition-colors">Voir →</span>
         </div>
       </div>
     </Link>

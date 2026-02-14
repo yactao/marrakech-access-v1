@@ -33,14 +33,16 @@ function IntroOverlay({ onComplete }: { onComplete: () => void }) {
       }`}
       style={{ pointerEvents: 'none' }}
     >
-      {/* Logo rond */}
+      {/* Logo réel */}
       <div
-        className="w-28 h-28 rounded-full border-2 border-gold p-1 mb-6 opacity-0 animate-intro-reveal"
+        className="w-36 h-36 mb-6 opacity-0 animate-intro-reveal"
         style={{ animationDelay: '0s' }}
       >
-        <div className="w-full h-full rounded-full bg-dark-lighter flex items-center justify-center">
-          <span className="font-playfair text-gold text-3xl font-bold">MA</span>
-        </div>
+        <img
+          src="/images/logo.jpg"
+          alt="Marrakech Access"
+          className="w-full h-full object-contain"
+        />
       </div>
 
       {/* Nom */}

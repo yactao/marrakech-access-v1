@@ -7,6 +7,7 @@ import chatRoutes from './routes/chat.routes';
 import ownerRoutes from './routes/owner.routes';
 import adminRoutes from './routes/admin.routes';
 import investRoutes from './routes/invest.routes';
+import bookingsRoutes from './routes/bookings.routes';
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/owner', ownerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/invest', investRoutes);
+app.use('/api/bookings', bookingsRoutes);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
