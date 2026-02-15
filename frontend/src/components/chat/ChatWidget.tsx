@@ -203,26 +203,72 @@ export default function ChatWidget() {
       )}
 
       {/* BOUTON FLOTTANT */}
-      <button
-        onClick={isOpen ? () => setIsOpen(false) : handleOpen}
-        className={`fixed bottom-6 right-6 z-[70] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${
-          isOpen
-            ? 'bg-dark-lighter border border-white/10'
-            : 'bg-dark-light border border-gold/30 hover:border-gold hover:scale-110'
-        }`}
-      >
-        {isOpen ? (
-          <span className="text-white/60 text-xl">✕</span>
-        ) : (
-          <div className="relative">
-            <img src="/images/fez.svg" alt="Majordome" className={`w-9 h-9 object-contain ${pulseButton ? 'animate-bounce' : ''}`} />
-            {!hasInteracted && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-gold animate-pulse"></span>
-            )}
+ {/* BOUTON FLOTTANT */}
+      <div className="fixed bottom-6 right-6 z-[70]">
+
+        {/* Ondes pulsantes (seulement si pas ouvert et pas encore interagi) */}
+        {!isOpen && !hasInteracted && (
+          <>
+            <span className="absolute inset-0 rounded-full border border-gold/40 animate-ping-slow" />
+            <span className="absolute -inset-2 rounded-full border border-gold/20 animate-ping-slower" />
+            <span className="absolute -inset-4 rounded-full border border-gold/10 animate-ping-slowest" />
+          </>
+        )}
+
+        {/* Texte circulaire rotatif */}
+        {!isOpen && (
+          <div className="absolute -inset-5 animate-spin-slow pointer-events-none">
+            <svg viewBox="0 0 100 100" className="w-full h-full">
+              <defs>
+                <path id="circlePath" d="M 50,50 m -37,0 a 37,37 0 1,1 74,0 a 37,37 0 1,1 -74,0" />
+              </defs>
+              <text className="fill-gold/40" style={{ fontSize: '8.5px', letterSpacing: '2.5px' }}>
+                <textPath href="#circlePath">
+                  ✦ VOTRE MAJORDOME ✦ DEMANDEZ-MOI ✦ 24/7
+                </textPath>
+              </text>
+            </svg>
           </div>
         )}
-      </button>
 
+        {/* Particules dorées orbitantes */}
+        {!isOpen && !hasInteracted && (
+          <div className="absolute inset-0 pointer-events-none">
+            <span className="absolute w-1.5 h-1.5 bg-gold rounded-full animate-orbit-1" />
+            <span className="absolute w-1 h-1 bg-gold/60 rounded-full animate-orbit-2" />
+            <span className="absolute w-1.5 h-1.5 bg-gold/80 rounded-full animate-orbit-3" />
+          </div>
+        )}
+
+        {/* Bouton principal */}
+        <button
+          onClick={isOpen ? () => setIsOpen(false) : handleOpen}
+          className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${
+            isOpen
+              ? 'bg-dark-lighter border border-white/10'
+              : 'bg-dark-light border border-gold/30 hover:border-gold hover:scale-110 hover:shadow-gold/20 hover:shadow-xl'
+          }`}
+        >
+          {isOpen ? (
+            <span className="text-white/60 text-xl">✕</span>
+          ) : (
+            <div className="relative">
+              <img
+                src="/images/fez.svg"
+                alt="Majordome"
+                className="w-9 h-9 object-contain animate-float"
+              />
+              {/* Badge notification */}
+              {!hasInteracted && (
+                <span className="absolute -top-1 -right-1 flex items-center justify-center">
+                  <span className="absolute w-3 h-3 rounded-full bg-gold animate-ping" />
+                  <span className="relative w-2.5 h-2.5 rounded-full bg-gold" />
+                </span>
+              )}
+            </div>
+          )}
+        </button>
+      </div>
       {/* FENÊTRE DE CHAT */}
       {isOpen && (
         <div className="fixed bottom-24 right-6 z-[70] w-[380px] h-[550px] rounded-2xl overflow-hidden border border-white/10 bg-dark shadow-2xl flex flex-col"
@@ -340,7 +386,7 @@ export default function ChatWidget() {
       )}
 
       <style jsx>{`
-        @keyframes slideUp {
+      @keyframes slideUp {
           from { opacity: 0; transform: translateY(20px) scale(0.95); }
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
@@ -349,6 +395,55 @@ export default function ChatWidget() {
           50% { transform: scale(1.02) translateY(-2px); }
           100% { opacity: 1; transform: scale(1) translateY(0); }
         }
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-3px); }
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes ping-slow {
+          0% { transform: scale(1); opacity: 0.4; }
+          100% { transform: scale(1.8); opacity: 0; }
+        }
+        @keyframes ping-slower {
+          0% { transform: scale(1); opacity: 0.25; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+        @keyframes ping-slowest {
+          0% { transform: scale(1); opacity: 0.15; }
+          100% { transform: scale(2.6); opacity: 0; }
+        }
+        @keyframes orbit-1 {
+          0% { top: -6px; left: 50%; transform: translateX(-50%); opacity: 1; }
+          25% { top: 50%; left: calc(100% + 6px); transform: translateY(-50%); opacity: 0.8; }
+          50% { top: calc(100% + 6px); left: 50%; transform: translateX(-50%); opacity: 0.6; }
+          75% { top: 50%; left: -6px; transform: translateY(-50%); opacity: 0.8; }
+          100% { top: -6px; left: 50%; transform: translateX(-50%); opacity: 1; }
+        }
+        @keyframes orbit-2 {
+          0% { top: 50%; left: calc(100% + 8px); transform: translateY(-50%); }
+          25% { top: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
+          50% { top: 50%; left: -8px; transform: translateY(-50%); }
+          75% { top: -8px; left: 50%; transform: translateX(-50%); }
+          100% { top: 50%; left: calc(100% + 8px); transform: translateY(-50%); }
+        }
+        @keyframes orbit-3 {
+          0% { top: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
+          25% { top: 50%; left: -4px; transform: translateY(-50%); }
+          50% { top: -4px; left: 50%; transform: translateX(-50%); }
+          75% { top: 50%; left: calc(100% + 4px); transform: translateY(-50%); }
+          100% { top: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .animate-spin-slow { animation: spin-slow 12s linear infinite; }
+        .animate-ping-slow { animation: ping-slow 2s ease-out infinite; }
+        .animate-ping-slower { animation: ping-slower 2.5s ease-out infinite 0.3s; }
+        .animate-ping-slowest { animation: ping-slowest 3s ease-out infinite 0.6s; }
+        .animate-orbit-1 { animation: orbit-1 4s linear infinite; }
+        .animate-orbit-2 { animation: orbit-2 5s linear infinite; }
+        .animate-orbit-3 { animation: orbit-3 3.5s linear infinite; }
       `}</style>
     </>
   );
