@@ -4,6 +4,11 @@ import {
   updatePropertyStatus,
   updateBookingStatus,
   updateTicketStatus,
+  getEvents,
+  getEventById,
+  createEvent,
+  updateEvent,
+  deleteEvent,
 } from '../controllers/admin.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { upload, uploadImage, updatePropertyPhotos, updateExtraPhoto, listMedia } from '../controllers/upload.controller';
@@ -21,5 +26,12 @@ router.get('/media', listMedia);
 router.post('/upload', upload.single('image'), uploadImage);
 router.put('/properties/:id/photos', updatePropertyPhotos);
 router.put('/extras/:id/photo', updateExtraPhoto);
+
+// Routes événements
+router.get('/events', getEvents);
+router.get('/events/:id', getEventById);
+router.post('/events', createEvent);
+router.put('/events/:id', updateEvent);
+router.delete('/events/:id', deleteEvent);
 
 export default router;

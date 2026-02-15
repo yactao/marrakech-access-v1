@@ -168,3 +168,201 @@ export async function updateTicketStatus(req: AuthRequest, res: Response): Promi
     res.status(500).json({ error: 'Erreur serveur' });
   }
 }
+
+// =============================================
+// GESTION DES ÉVÉNEMENTS
+// =============================================
+
+// GET /api/admin/events
+export async function getEvents(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const events = await prisma.event.findMany({
+      orderBy: [{ featured: 'desc' }, { startDate: 'asc' }],
+    });
+
+    res.json({ events });
+  } catch (error) {
+    console.error('Erreur getEvents:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+// GET /api/admin/events/:id
+export async function getEventById(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    
+    const event = await prisma.event.findUnique({
+      where: { id },
+    });
+
+    if (!event) {
+      res.status(404).json({ error: 'Événement non trouvé' });
+      return;
+    }
+
+    res.json({ event });
+  } catch (error) {
+    console.error('Erreur getEventById:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+// POST /api/admin/events
+export async function createEvent(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const {
+      name,
+      category,
+      description,
+      location,
+      address,
+      latitude,
+      longitude,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+      isRecurring,
+      recurrence,
+      price,
+      photo,
+      website,
+      phone,
+      featured,
+      active,
+    } = req.body;
+
+    if (!name || !category || !description || !location || !startDate) {
+      res.status(400).json({ error: 'Champs requis manquants: name, category, description, location, startDate' });
+      return;
+    }
+
+    const validCategories = ['CULTURE', 'MUSIQUE', 'SPORT', 'GASTRONOMIE', 'TRADITION', 'FESTIVAL', 'MARCHE', 'EXCURSION'];
+    if (!validCategories.includes(category)) {
+      res.status(400).json({ error: 'Catégorie invalide' });
+      return;
+    }
+
+    const event = await prisma.event.create({
+      data: {
+        name,
+        category,
+        description,
+        location,
+        address,
+        latitude: latitude ? parseFloat(latitude) : null,
+        longitude: longitude ? parseFloat(longitude) : null,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null,
+        startTime,
+        endTime,
+        isRecurring: isRecurring || false,
+        recurrence,
+        price,
+        photo,
+        website,
+        phone,
+        featured: featured || false,
+        active: active !== false,
+      },
+    });
+
+    res.status(201).json({ message: 'Événement créé', event });
+  } catch (error) {
+    console.error('Erreur createEvent:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+// PUT /api/admin/events/:id
+export async function updateEvent(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const {
+      name,
+      category,
+      description,
+      location,
+      address,
+      latitude,
+      longitude,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+      isRecurring,
+      recurrence,
+      price,
+      photo,
+      website,
+      phone,
+      featured,
+      active,
+    } = req.body;
+
+    const existingEvent = await prisma.event.findUnique({ where: { id } });
+    if (!existingEvent) {
+      res.status(404).json({ error: 'Événement non trouvé' });
+      return;
+    }
+
+    if (category) {
+      const validCategories = ['CULTURE', 'MUSIQUE', 'SPORT', 'GASTRONOMIE', 'TRADITION', 'FESTIVAL', 'MARCHE', 'EXCURSION'];
+      if (!validCategories.includes(category)) {
+        res.status(400).json({ error: 'Catégorie invalide' });
+        return;
+      }
+    }
+
+    const event = await prisma.event.update({
+      where: { id },
+      data: {
+        ...(name && { name }),
+        ...(category && { category }),
+        ...(description && { description }),
+        ...(location && { location }),
+        ...(address !== undefined && { address }),
+        ...(latitude !== undefined && { latitude: latitude ? parseFloat(latitude) : null }),
+        ...(longitude !== undefined && { longitude: longitude ? parseFloat(longitude) : null }),
+        ...(startDate && { startDate: new Date(startDate) }),
+        ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
+        ...(startTime !== undefined && { startTime }),
+        ...(endTime !== undefined && { endTime }),
+        ...(isRecurring !== undefined && { isRecurring }),
+        ...(recurrence !== undefined && { recurrence }),
+        ...(price !== undefined && { price }),
+        ...(photo !== undefined && { photo }),
+        ...(website !== undefined && { website }),
+        ...(phone !== undefined && { phone }),
+        ...(featured !== undefined && { featured }),
+        ...(active !== undefined && { active }),
+      },
+    });
+
+    res.json({ message: 'Événement mis à jour', event });
+  } catch (error) {
+    console.error('Erreur updateEvent:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+// DELETE /api/admin/events/:id
+export async function deleteEvent(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+
+    const existingEvent = await prisma.event.findUnique({ where: { id } });
+    if (!existingEvent) {
+      res.status(404).json({ error: 'Événement non trouvé' });
+      return;
+    }
+
+    await prisma.event.delete({ where: { id } });
+
+    res.json({ message: 'Événement supprimé' });
+  } catch (error) {
+    console.error('Erreur deleteEvent:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}

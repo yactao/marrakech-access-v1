@@ -828,15 +828,118 @@ function getFallbackWeather(days: number) {
   };
 }
 
-// --- GET EVENTS ---
+// --- GET EVENTS (depuis la base de données) ---
 async function getEvents(args: { start_date?: string; end_date?: string; category?: string }) {
   const startDate = args.start_date ? new Date(args.start_date) : new Date();
-  const endDate = args.end_date ? new Date(args.end_date) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const category = args.category || 'all';
+  const endDate = args.end_date ? new Date(args.end_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 jours par défaut
+  const category = args.category?.toUpperCase() || 'all';
 
-  // Base d'événements récurrents et saisonniers de Marrakech
+  try {
+    // Récupérer les événements depuis la base de données
+    const whereClause: any = {
+      active: true,
+      OR: [
+        // Événements récurrents (toujours inclus)
+        { isRecurring: true },
+        // Événements ponctuels dans la période
+        {
+          AND: [
+            { startDate: { lte: endDate } },
+            {
+              OR: [
+                { endDate: { gte: startDate } },
+                { endDate: null, startDate: { gte: startDate } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    // Filtre par catégorie
+    if (category !== 'ALL') {
+      whereClause.category = category;
+    }
+
+    const dbEvents = await prisma.event.findMany({
+      where: whereClause,
+      orderBy: [{ featured: 'desc' }, { startDate: 'asc' }],
+    });
+
+    // Transformer les événements pour le majordome
+    const evenements = dbEvents.map((event) => ({
+      nom: event.name,
+      categorie: event.category.toLowerCase(),
+      lieu: event.location,
+      adresse: event.address,
+      description: event.description,
+      horaire: event.isRecurring
+        ? formatRecurrence(event.recurrence, event.startTime)
+        : formatEventDate(event.startDate, event.endDate, event.startTime),
+      prix: event.price || 'Non communiqué',
+      recurrent: event.isRecurring,
+      special: event.featured,
+      site_web: event.website,
+      telephone: event.phone,
+    }));
+
+    // Si aucun événement en DB, retourner les événements par défaut
+    if (evenements.length === 0) {
+      return getDefaultEvents(startDate, endDate, category);
+    }
+
+    return {
+      periode: {
+        du: startDate.toISOString().split('T')[0],
+        au: endDate.toISOString().split('T')[0],
+      },
+      categorie_filtree: category === 'ALL' ? 'toutes' : category.toLowerCase(),
+      nombre_evenements: evenements.length,
+      evenements: evenements,
+      conseil: 'Pour les événements spéciaux, je vous recommande de réserver à l\'avance. Souhaitez-vous que j\'ajoute une activité à votre séjour ?',
+    };
+  } catch (error) {
+    console.error('Erreur getEvents:', error);
+    // Fallback sur les événements par défaut
+    return getDefaultEvents(startDate, endDate, category);
+  }
+}
+
+function formatRecurrence(recurrence: string | null, startTime: string | null): string {
+  if (!recurrence) return startTime ? `À ${startTime}` : 'Horaires variables';
+  
+  const time = startTime ? ` à ${startTime}` : '';
+  
+  if (recurrence === 'daily') return `Tous les jours${time}`;
+  if (recurrence.startsWith('weekly:')) {
+    const days = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const dayNum = parseInt(recurrence.split(':')[1]);
+    return `Tous les ${days[dayNum]}s${time}`;
+  }
+  if (recurrence.startsWith('monthly:')) {
+    const dayOfMonth = recurrence.split(':')[1];
+    return `Le ${dayOfMonth} de chaque mois${time}`;
+  }
+  
+  return startTime ? `À ${startTime}` : 'Horaires variables';
+}
+
+function formatEventDate(startDate: Date, endDate: Date | null, startTime: string | null): string {
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
+  const start = startDate.toLocaleDateString('fr-FR', options);
+  const time = startTime ? ` à ${startTime}` : '';
+  
+  if (!endDate || startDate.toDateString() === endDate.toDateString()) {
+    return `${start}${time}`;
+  }
+  
+  const end = endDate.toLocaleDateString('fr-FR', options);
+  return `Du ${start} au ${end}${time}`;
+}
+
+function getDefaultEvents(startDate: Date, endDate: Date, category: string) {
+  // Événements par défaut si la DB est vide
   const allEvents = [
-    // Événements récurrents
     {
       nom: 'Soirée Gnaoua au Café Clock',
       categorie: 'musique',
@@ -845,7 +948,6 @@ async function getEvents(args: { start_date?: string; end_date?: string; categor
       horaire: 'Tous les jeudis, 20h30',
       prix: '200 MAD (avec dîner)',
       recurrent: true,
-      jour_semaine: 4, // Jeudi
     },
     {
       nom: 'Spectacle Fantasia',
@@ -857,16 +959,6 @@ async function getEvents(args: { start_date?: string; end_date?: string; categor
       recurrent: true,
     },
     {
-      nom: 'Cours de cuisine marocaine',
-      categorie: 'gastronomie',
-      lieu: 'La Maison Arabe',
-      description: 'Apprenez à préparer tajine, couscous et pastilla avec un chef',
-      horaire: 'Lundi, Mercredi, Vendredi, 10h',
-      prix: '800 MAD',
-      recurrent: true,
-      jours_semaine: [1, 3, 5],
-    },
-    {
       nom: 'Visite guidée des souks',
       categorie: 'culture',
       lieu: 'Place Jemaa el-Fna',
@@ -876,74 +968,30 @@ async function getEvents(args: { start_date?: string; end_date?: string; categor
       recurrent: true,
     },
     {
-      nom: 'Hammam & Massage traditionnel',
-      categorie: 'tradition',
-      lieu: 'Les Bains de Marrakech',
-      description: 'Rituel complet : gommage au savon noir, massage à l\'huile d\'argan',
-      horaire: 'Sur réservation',
-      prix: 'À partir de 600 MAD',
+      nom: 'Cours de cuisine marocaine',
+      categorie: 'gastronomie',
+      lieu: 'La Maison Arabe',
+      description: 'Apprenez à préparer tajine, couscous et pastilla avec un chef',
+      horaire: 'Lundi, Mercredi, Vendredi, 10h',
+      prix: '800 MAD',
       recurrent: true,
-    },
-    // Festivals annuels (dates approximatives)
-    {
-      nom: 'Festival International du Film de Marrakech',
-      categorie: 'culture',
-      lieu: 'Palais des Congrès',
-      description: 'Stars internationales, projections et tapis rouge',
-      date_debut: '2025-11-29',
-      date_fin: '2025-12-07',
-      prix: 'Gratuit - Sur invitation',
-      special: true,
-    },
-    {
-      nom: 'Marathon de Marrakech',
-      categorie: 'sport',
-      lieu: 'Départ Place Jemaa el-Fna',
-      description: '42km à travers la ville ocre, ambiance festive garantie',
-      date_debut: '2026-01-26',
-      date_fin: '2026-01-26',
-      prix: '50€ inscription',
-      special: true,
-    },
-    {
-      nom: 'Festival Gnaoua & Musiques du Monde',
-      categorie: 'musique',
-      lieu: 'Essaouira (2h30 de Marrakech)',
-      description: 'Le plus grand festival de musique du Maroc, artistes internationaux',
-      date_debut: '2026-06-25',
-      date_fin: '2026-06-28',
-      prix: 'Gratuit',
-      special: true,
     },
   ];
 
-  // Filtrer les événements
-  const filteredEvents = allEvents.filter(event => {
-    // Filtre catégorie
-    if (category !== 'all' && event.categorie !== category) return false;
-    
-    // Événements récurrents : toujours inclus
-    if ((event as any).recurrent) return true;
-    
-    // Événements spéciaux : vérifier les dates
-    if ((event as any).date_debut) {
-      const eventStart = new Date((event as any).date_debut);
-      const eventEnd = new Date((event as any).date_fin);
-      return eventStart <= endDate && eventEnd >= startDate;
-    }
-    
-    return true;
-  });
+  const filteredEvents = category === 'ALL' 
+    ? allEvents 
+    : allEvents.filter(e => e.categorie === category.toLowerCase());
 
   return {
     periode: {
       du: startDate.toISOString().split('T')[0],
       au: endDate.toISOString().split('T')[0],
     },
-    categorie_filtree: category,
+    categorie_filtree: category === 'ALL' ? 'toutes' : category.toLowerCase(),
     nombre_evenements: filteredEvents.length,
     evenements: filteredEvents,
-    conseil: 'Pour les événements spéciaux, je vous recommande de réserver à l\'avance. Souhaitez-vous que j\'ajoute une activité à votre séjour ?',
+    source: 'Événements par défaut - Ajoutez vos événements via l\'admin',
+    conseil: 'Pour les événements spéciaux, je vous recommande de réserver à l\'avance.',
   };
 }
 

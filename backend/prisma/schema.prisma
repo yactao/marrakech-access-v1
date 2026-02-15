@@ -296,3 +296,55 @@ model KnowledgeBase {
   @@fulltext([title, content])
   @@map("knowledge_base")
 }
+
+enum EventCategory {
+  CULTURE
+  MUSIQUE
+  SPORT
+  GASTRONOMIE
+  TRADITION
+  FESTIVAL
+  MARCHE
+  EXCURSION
+}
+
+model Event {
+  id          String        @id @default(cuid())
+  name        String
+  category    EventCategory
+  description String        @db.Text
+  
+  // Lieu
+  location    String
+  address     String?
+  latitude    Float?
+  longitude   Float?
+  
+  // Dates
+  startDate   DateTime
+  endDate     DateTime?
+  startTime   String?       // "20:30"
+  endTime     String?
+  
+  // Récurrence
+  isRecurring Boolean       @default(false)
+  recurrence  String?       // "weekly:4" (jeudi), "monthly:15" (le 15), "daily"
+  
+  // Infos
+  price       String?       // "200 MAD", "Gratuit", "50-150 MAD"
+  photo       String?
+  website     String?
+  phone       String?
+  
+  // État
+  featured    Boolean       @default(false)
+  active      Boolean       @default(true)
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  @@index([category])
+  @@index([startDate])
+  @@index([active])
+  @@map("events")
+}
