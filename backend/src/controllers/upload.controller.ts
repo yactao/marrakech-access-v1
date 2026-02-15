@@ -162,7 +162,12 @@ export async function listMedia(req: AuthRequest, res: Response): Promise<void> 
 // DELETE /api/admin/media/:publicId — Supprimer une image de Cloudinary
 export async function deleteMedia(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const publicId = req.params.publicId;
+    const publicId = req.params.publicId as string;
+    
+    if (!publicId) {
+      res.status(400).json({ error: 'publicId requis' });
+      return;
+    }
     
     await cloudinary.uploader.destroy(publicId);
     
