@@ -4,6 +4,10 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
+@keyframes introReveal {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 html {
   scroll-behavior: smooth;
 }
@@ -37,3 +41,4 @@ body {
   background-color: rgba(200, 169, 126, 0.3);
   color: #FAFAFA;
 }
+
