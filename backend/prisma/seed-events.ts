@@ -5,9 +5,13 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🎭 Seed des événements...\n');
 
-  const events = [
-    // Événements récurrents
-    {
+  // Supprimer les anciens événements
+  await prisma.event.deleteMany({});
+  console.log('🗑️  Anciens événements supprimés\n');
+
+  // Créer les événements un par un avec le bon typage
+  await prisma.event.create({
+    data: {
       name: 'Soirée Gnaoua au Café Clock',
       category: 'MUSIQUE',
       description: 'Concert de musique Gnaoua traditionnelle avec dîner marocain. Une expérience authentique au cœur de la Médina.',
@@ -16,13 +20,17 @@ async function main() {
       startDate: new Date('2026-01-01'),
       startTime: '20:30',
       isRecurring: true,
-      recurrence: 'weekly:4', // Jeudi
+      recurrence: 'weekly:4',
       price: '200 MAD (avec dîner)',
       website: 'https://cafeclock.com',
       featured: true,
       active: true,
     },
-    {
+  });
+  console.log('✅ Soirée Gnaoua au Café Clock');
+
+  await prisma.event.create({
+    data: {
       name: 'Spectacle Fantasia Chez Ali',
       category: 'TRADITION',
       description: 'Dîner-spectacle grandiose avec cavaliers berbères, acrobates, danseurs et folklore marocain sous les étoiles.',
@@ -37,7 +45,11 @@ async function main() {
       featured: true,
       active: true,
     },
-    {
+  });
+  console.log('✅ Spectacle Fantasia Chez Ali');
+
+  await prisma.event.create({
+    data: {
       name: 'Cours de Cuisine Marocaine',
       category: 'GASTRONOMIE',
       description: 'Apprenez à préparer tajine, couscous et pastilla avec un chef. Visite du marché incluse.',
@@ -46,12 +58,16 @@ async function main() {
       startDate: new Date('2026-01-01'),
       startTime: '10:00',
       isRecurring: true,
-      recurrence: 'weekly:1', // Lundi
+      recurrence: 'weekly:1',
       price: '800 MAD',
       website: 'https://lamaisonarabe.com',
       active: true,
     },
-    {
+  });
+  console.log('✅ Cours de Cuisine Marocaine');
+
+  await prisma.event.create({
+    data: {
       name: 'Visite Guidée des Souks',
       category: 'CULTURE',
       description: 'Découverte des artisans et secrets de la Médina avec un guide local francophone.',
@@ -64,7 +80,11 @@ async function main() {
       price: '350 MAD/personne',
       active: true,
     },
-    {
+  });
+  console.log('✅ Visite Guidée des Souks');
+
+  await prisma.event.create({
+    data: {
       name: 'Marché de la Place Jemaa el-Fna',
       category: 'MARCHE',
       description: 'Le célèbre marché nocturne avec ses conteurs, charmeurs de serpents, stands de nourriture et musiciens.',
@@ -79,7 +99,11 @@ async function main() {
       featured: true,
       active: true,
     },
-    {
+  });
+  console.log('✅ Marché de la Place Jemaa el-Fna');
+
+  await prisma.event.create({
+    data: {
       name: 'Balade en Calèche',
       category: 'EXCURSION',
       description: 'Tour de la ville en calèche traditionnelle. Remparts, jardins et quartiers historiques.',
@@ -92,8 +116,11 @@ async function main() {
       price: '300-400 MAD/heure',
       active: true,
     },
-    // Festivals annuels 2026
-    {
+  });
+  console.log('✅ Balade en Calèche');
+
+  await prisma.event.create({
+    data: {
       name: 'Festival International du Film de Marrakech',
       category: 'FESTIVAL',
       description: 'Stars internationales, projections exclusives et tapis rouge. Le rendez-vous cinéma de l\'année.',
@@ -108,7 +135,11 @@ async function main() {
       featured: true,
       active: true,
     },
-    {
+  });
+  console.log('✅ Festival International du Film de Marrakech');
+
+  await prisma.event.create({
+    data: {
       name: 'Marathon de Marrakech',
       category: 'SPORT',
       description: '42km à travers la ville ocre. Semi-marathon et 10km également disponibles.',
@@ -123,7 +154,11 @@ async function main() {
       featured: true,
       active: true,
     },
-    {
+  });
+  console.log('✅ Marathon de Marrakech');
+
+  await prisma.event.create({
+    data: {
       name: 'Festival Gnaoua d\'Essaouira',
       category: 'FESTIVAL',
       description: 'Le plus grand festival de musique du Maroc. 4 jours de concerts gratuits avec artistes internationaux.',
@@ -138,7 +173,11 @@ async function main() {
       featured: true,
       active: true,
     },
-    {
+  });
+  console.log('✅ Festival Gnaoua d\'Essaouira');
+
+  await prisma.event.create({
+    data: {
       name: 'Aïd el-Fitr (Fin du Ramadan)',
       category: 'TRADITION',
       description: 'Fête de fin du Ramadan. Ambiance festive dans toute la ville, pâtisseries traditionnelles.',
@@ -150,26 +189,14 @@ async function main() {
       price: 'N/A',
       active: true,
     },
-  ];
+  });
+  console.log('✅ Aïd el-Fitr');
 
-  for (const event of events) {
-    try {
-      await prisma.event.upsert({
-        where: { id: event.name.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20) },
-        update: event,
-        create: event,
-      });
-      console.log(`✅ ${event.name}`);
-    } catch (e) {
-      // Si upsert échoue, créer directement
-      await prisma.event.create({ data: event });
-      console.log(`✅ ${event.name} (créé)`);
-    }
-  }
-
+  const count = await prisma.event.count();
+  
   console.log('\n══════════════════════════════════════');
   console.log('🎭 ÉVÉNEMENTS SEEDÉS AVEC SUCCÈS');
-  console.log(`   ${events.length} événements ajoutés`);
+  console.log(`   ${count} événements ajoutés`);
   console.log('══════════════════════════════════════\n');
 }
 
