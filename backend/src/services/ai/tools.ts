@@ -644,6 +644,26 @@ const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY || 'c248a745750c3e91
 const MARRAKECH_LAT = 31.6295;
 const MARRAKECH_LON = -7.9811;
 
+// Types pour OpenWeatherMap
+interface OpenWeatherCurrent {
+  main: { temp: number; feels_like: number; humidity: number; pressure: number };
+  weather: { id: number; description: string }[];
+  wind: { speed: number };
+  visibility: number;
+  sys: { sunrise: number; sunset: number };
+}
+
+interface OpenWeatherForecastItem {
+  dt_txt: string;
+  main: { temp: number; humidity: number };
+  weather: { id: number; description: string }[];
+  pop: number;
+}
+
+interface OpenWeatherForecast {
+  list: OpenWeatherForecastItem[];
+}
+
 async function getWeather(args: { days?: number }) {
   const days = Math.min(args.days || 3, 7);
   
@@ -652,21 +672,21 @@ async function getWeather(args: { days?: number }) {
     const currentRes = await fetch(
       `https://api.openweathermap.org/data/2.5/weather?lat=${MARRAKECH_LAT}&lon=${MARRAKECH_LON}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=fr`
     );
-    const currentData = await currentRes.json();
+    const currentData = await currentRes.json() as OpenWeatherCurrent;
     
     // Appel API prévisions 5 jours
     const forecastRes = await fetch(
       `https://api.openweathermap.org/data/2.5/forecast?lat=${MARRAKECH_LAT}&lon=${MARRAKECH_LON}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=fr`
     );
-    const forecastData = await forecastRes.json();
+    const forecastData = await forecastRes.json() as OpenWeatherForecast;
     
     // Transformer les données actuelles
     const weatherIcon = getWeatherEmoji(currentData.weather[0].id);
     const today = new Date();
     
     // Grouper les prévisions par jour
-    const dailyForecasts = new Map<string, any[]>();
-    forecastData.list.forEach((item: any) => {
+    const dailyForecasts = new Map<string, OpenWeatherForecastItem[]>();
+    forecastData.list.forEach((item) => {
       const date = item.dt_txt.split(' ')[0];
       if (!dailyForecasts.has(date)) {
         dailyForecasts.set(date, []);
@@ -675,12 +695,12 @@ async function getWeather(args: { days?: number }) {
     });
     
     // Construire les prévisions journalières
-    const previsions: any[] = [];
+    const previsions: { date: string; jour: string; temp_max: number; temp_min: number; conditions: string; precipitation: string; humidite: string }[] = [];
     let count = 0;
     dailyForecasts.forEach((items, date) => {
       if (count >= days) return;
       
-      const temps = items.map((i: any) => i.main.temp);
+      const temps = items.map((i) => i.main.temp);
       const dateObj = new Date(date);
       
       previsions.push({
@@ -689,8 +709,8 @@ async function getWeather(args: { days?: number }) {
         temp_max: Math.round(Math.max(...temps)),
         temp_min: Math.round(Math.min(...temps)),
         conditions: `${getWeatherEmoji(items[Math.floor(items.length / 2)].weather[0].id)} ${items[Math.floor(items.length / 2)].weather[0].description}`,
-        precipitation: items.some((i: any) => i.pop > 0.2) ? `${Math.round(Math.max(...items.map((i: any) => i.pop)) * 100)}%` : '0%',
-        humidite: `${Math.round(items.reduce((acc: number, i: any) => acc + i.main.humidity, 0) / items.length)}%`,
+        precipitation: items.some((i) => i.pop > 0.2) ? `${Math.round(Math.max(...items.map((i) => i.pop)) * 100)}%` : '0%',
+        humidite: `${Math.round(items.reduce((acc, i) => acc + i.main.humidity, 0) / items.length)}%`,
       });
       count++;
     });
