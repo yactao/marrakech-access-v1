@@ -1426,7 +1426,7 @@ async function addToCart(args: {
 
     const extra = await prisma.extra.findFirst({
       where: { 
-        name: { contains: args.extra_name, mode: 'insensitive' },
+        name: { contains: args.extra_name },
         available: true,
       },
       select: {
