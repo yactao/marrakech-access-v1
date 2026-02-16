@@ -140,6 +140,73 @@ export const tools: ChatCompletionTool[] = [
       },
     },
   },
+  // =============================================
+  // NOUVEAUX TOOLS - KNOWLEDGE BASE MARRAKECH
+  // =============================================
+  {
+    type: 'function',
+    function: {
+      name: 'get_weather',
+      description: 'Obtient la météo actuelle et les prévisions à Marrakech. Utilise cet outil quand le client demande le temps qu\'il fait, s\'il doit prendre une veste, ou pour conseiller sur les activités selon la météo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          days: { 
+            type: 'number', 
+            description: 'Nombre de jours de prévision (1-7, défaut: 3)',
+            default: 3
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_events',
+      description: 'Liste les événements, festivals et activités spéciales à Marrakech pour une période donnée. Utilise cet outil quand le client demande "que faire", "événements", "festivals", ou planifie son séjour.',
+      parameters: {
+        type: 'object',
+        properties: {
+          start_date: { 
+            type: 'string', 
+            description: 'Date de début au format YYYY-MM-DD (défaut: aujourd\'hui)' 
+          },
+          end_date: { 
+            type: 'string', 
+            description: 'Date de fin au format YYYY-MM-DD (défaut: +7 jours)' 
+          },
+          category: { 
+            type: 'string', 
+            enum: ['culture', 'musique', 'sport', 'gastronomie', 'tradition', 'all'],
+            description: 'Catégorie d\'événement (défaut: all)' 
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_city_tips',
+      description: 'Donne des conseils pratiques et culturels sur Marrakech : quartiers, transport, pourboires, négociation, sécurité, dress code, etc. Utilise cet outil pour tout conseil de "local" ou question pratique sur la ville.',
+      parameters: {
+        type: 'object',
+        properties: {
+          topic: { 
+            type: 'string', 
+            enum: ['quartiers', 'transport', 'argent', 'culture', 'securite', 'shopping', 'restaurants', 'vie_nocturne', 'excursions', 'general'],
+            description: 'Sujet du conseil' 
+          },
+          district: { 
+            type: 'string', 
+            description: 'Quartier spécifique (optionnel): Médina, Guéliz, Hivernage, Palmeraie, Mellah, Amelkis' 
+          },
+        },
+        required: ['topic'],
+      },
+    },
+  },
 ];
 
 // =============================================
@@ -164,6 +231,13 @@ export async function executeTool(name: string, args: any, userId?: string | nul
       return createTicket(args, userId);
     case 'get_booking_status':
       return getBookingStatus(userId);
+    // Nouveaux tools Knowledge Base
+    case 'get_weather':
+      return getWeather(args);
+    case 'get_events':
+      return getEvents(args);
+    case 'get_city_tips':
+      return getCityTips(args);
     default:
       return { error: `Outil inconnu : ${name}` };
   }
@@ -558,5 +632,626 @@ async function getBookingStatus(userId?: string | null) {
       statut: statusLabels[b.status] || b.status,
       extras: b.extras.map((e: any) => e.extra.name),
     })),
+  };
+}
+
+// =============================================
+// NOUVEAUX TOOLS - KNOWLEDGE BASE MARRAKECH
+// =============================================
+
+// --- GET WEATHER (OpenWeatherMap API) ---
+const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY || 'c248a745750c3e910096c3d07125ce6f';
+const MARRAKECH_LAT = 31.6295;
+const MARRAKECH_LON = -7.9811;
+
+// Types pour OpenWeatherMap
+interface OpenWeatherCurrent {
+  main: { temp: number; feels_like: number; humidity: number; pressure: number };
+  weather: { id: number; description: string }[];
+  wind: { speed: number };
+  visibility: number;
+  sys: { sunrise: number; sunset: number };
+}
+
+interface OpenWeatherForecastItem {
+  dt_txt: string;
+  main: { temp: number; humidity: number };
+  weather: { id: number; description: string }[];
+  pop: number;
+}
+
+interface OpenWeatherForecast {
+  list: OpenWeatherForecastItem[];
+}
+
+async function getWeather(args: { days?: number }) {
+  const days = Math.min(args.days || 3, 7);
+  
+  try {
+    // Appel API météo actuelle
+    const currentRes = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${MARRAKECH_LAT}&lon=${MARRAKECH_LON}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=fr`
+    );
+    const currentData = await currentRes.json() as OpenWeatherCurrent;
+    
+    // Appel API prévisions 5 jours
+    const forecastRes = await fetch(
+      `https://api.openweathermap.org/data/2.5/forecast?lat=${MARRAKECH_LAT}&lon=${MARRAKECH_LON}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=fr`
+    );
+    const forecastData = await forecastRes.json() as OpenWeatherForecast;
+    
+    // Transformer les données actuelles
+    const weatherIcon = getWeatherEmoji(currentData.weather[0].id);
+    const today = new Date();
+    
+    // Grouper les prévisions par jour
+    const dailyForecasts = new Map<string, OpenWeatherForecastItem[]>();
+    forecastData.list.forEach((item) => {
+      const date = item.dt_txt.split(' ')[0];
+      if (!dailyForecasts.has(date)) {
+        dailyForecasts.set(date, []);
+      }
+      dailyForecasts.get(date)!.push(item);
+    });
+    
+    // Construire les prévisions journalières
+    const previsions: { date: string; jour: string; temp_max: number; temp_min: number; conditions: string; precipitation: string; humidite: string }[] = [];
+    let count = 0;
+    dailyForecasts.forEach((items, date) => {
+      if (count >= days) return;
+      
+      const temps = items.map((i) => i.main.temp);
+      const dateObj = new Date(date);
+      
+      previsions.push({
+        date: date,
+        jour: dateObj.toLocaleDateString('fr-FR', { weekday: 'long' }),
+        temp_max: Math.round(Math.max(...temps)),
+        temp_min: Math.round(Math.min(...temps)),
+        conditions: `${getWeatherEmoji(items[Math.floor(items.length / 2)].weather[0].id)} ${items[Math.floor(items.length / 2)].weather[0].description}`,
+        precipitation: items.some((i) => i.pop > 0.2) ? `${Math.round(Math.max(...items.map((i) => i.pop)) * 100)}%` : '0%',
+        humidite: `${Math.round(items.reduce((acc, i) => acc + i.main.humidity, 0) / items.length)}%`,
+      });
+      count++;
+    });
+    
+    const weatherData = {
+      ville: 'Marrakech',
+      pays: 'Maroc',
+      mise_a_jour: new Date().toLocaleString('fr-FR', { timeZone: 'Africa/Casablanca' }),
+      source: 'OpenWeatherMap',
+      actuel: {
+        temperature: Math.round(currentData.main.temp),
+        ressenti: Math.round(currentData.main.feels_like),
+        conditions: `${weatherIcon} ${currentData.weather[0].description}`,
+        humidite: `${currentData.main.humidity}%`,
+        vent: `${Math.round(currentData.wind.speed * 3.6)} km/h`,
+        pression: `${currentData.main.pressure} hPa`,
+        visibilite: `${Math.round(currentData.visibility / 1000)} km`,
+        lever_soleil: new Date(currentData.sys.sunrise * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Casablanca' }),
+        coucher_soleil: new Date(currentData.sys.sunset * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Casablanca' }),
+      },
+      previsions: previsions,
+      conseils: getWeatherAdvice(today, currentData.main.temp),
+    };
+
+    return weatherData;
+    
+  } catch (error) {
+    console.error('Erreur API OpenWeatherMap:', error);
+    // Fallback sur données statiques en cas d'erreur
+    return getFallbackWeather(days);
+  }
+}
+
+function getWeatherEmoji(weatherId: number): string {
+  if (weatherId >= 200 && weatherId < 300) return '⛈️'; // Orage
+  if (weatherId >= 300 && weatherId < 400) return '🌧️'; // Bruine
+  if (weatherId >= 500 && weatherId < 600) return '🌧️'; // Pluie
+  if (weatherId >= 600 && weatherId < 700) return '❄️'; // Neige
+  if (weatherId >= 700 && weatherId < 800) return '🌫️'; // Brouillard
+  if (weatherId === 800) return '☀️'; // Ciel dégagé
+  if (weatherId === 801) return '🌤️'; // Quelques nuages
+  if (weatherId === 802) return '⛅'; // Nuages épars
+  if (weatherId >= 803) return '☁️'; // Nuageux
+  return '🌡️';
+}
+
+function getWeatherAdvice(date: Date, currentTemp: number): string[] {
+  const month = date.getMonth() + 1;
+  const advice: string[] = [];
+  
+  // Conseils basés sur la température réelle
+  if (currentTemp >= 35) {
+    advice.push('🧴 Crème solaire indispensable (indice 50+)');
+    advice.push('💧 Hydratez-vous très régulièrement');
+    advice.push('🕐 Évitez les sorties entre 12h et 16h');
+    advice.push('👒 Chapeau et lunettes de soleil obligatoires');
+    advice.push('🏊 Idéal pour profiter de la piscine');
+  } else if (currentTemp >= 25) {
+    advice.push('🌡️ Températures agréables pour les visites');
+    advice.push('🧴 Protection solaire recommandée');
+    advice.push('👕 Prévoir une petite veste pour le soir');
+    advice.push('🚶 Parfait pour explorer la Médina');
+  } else if (currentTemp >= 15) {
+    advice.push('🧥 Prévoir des vêtements chauds pour le soir');
+    advice.push('👕 Tenue légère en journée');
+    advice.push('🌡️ Journées douces, soirées fraîches');
+    advice.push('🏔️ Idéal pour une excursion à l\'Atlas');
+  } else {
+    advice.push('🧥 Vêtements chauds recommandés');
+    advice.push('☔ Un parapluie peut être utile');
+    advice.push('🌡️ Températures fraîches');
+  }
+  
+  // Conseils saisonniers
+  if (month >= 5 && month <= 9) {
+    advice.push('☀️ Indice UV élevé - protection solaire indispensable');
+  }
+  
+  return advice;
+}
+
+function getFallbackWeather(days: number) {
+  const today = new Date();
+  const month = today.getMonth() + 1;
+  let baseTemp = 22;
+  
+  if (month >= 6 && month <= 8) baseTemp = 35;
+  else if (month >= 3 && month <= 5) baseTemp = 25;
+  else if (month >= 9 && month <= 11) baseTemp = 24;
+  else baseTemp = 18;
+  
+  return {
+    ville: 'Marrakech',
+    pays: 'Maroc',
+    source: 'Données estimées (API indisponible)',
+    actuel: {
+      temperature: baseTemp,
+      ressenti: baseTemp + 2,
+      conditions: '☀️ Ensoleillé (estimation)',
+      humidite: '35%',
+      vent: '15 km/h',
+    },
+    previsions: Array.from({ length: days }, (_, i) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() + i);
+      return {
+        date: date.toISOString().split('T')[0],
+        jour: date.toLocaleDateString('fr-FR', { weekday: 'long' }),
+        temp_max: baseTemp + 3,
+        temp_min: baseTemp - 5,
+        conditions: '☀️ Ensoleillé (estimation)',
+      };
+    }),
+    conseils: getWeatherAdvice(today, baseTemp),
+  };
+}
+
+// --- GET EVENTS (depuis la base de données) ---
+async function getEvents(args: { start_date?: string; end_date?: string; category?: string }) {
+  const startDate = args.start_date ? new Date(args.start_date) : new Date();
+  const endDate = args.end_date ? new Date(args.end_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 jours par défaut
+  const category = args.category?.toUpperCase() || 'all';
+
+  try {
+    // Récupérer les événements depuis la base de données
+    const whereClause: any = {
+      active: true,
+      OR: [
+        // Événements récurrents (toujours inclus)
+        { isRecurring: true },
+        // Événements ponctuels dans la période
+        {
+          AND: [
+            { startDate: { lte: endDate } },
+            {
+              OR: [
+                { endDate: { gte: startDate } },
+                { endDate: null, startDate: { gte: startDate } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    // Filtre par catégorie
+    if (category !== 'ALL') {
+      whereClause.category = category;
+    }
+
+    const dbEvents = await prisma.event.findMany({
+      where: whereClause,
+      orderBy: [{ featured: 'desc' }, { startDate: 'asc' }],
+    });
+
+    // Transformer les événements pour le majordome
+    const evenements = dbEvents.map((event) => ({
+      nom: event.name,
+      categorie: event.category.toLowerCase(),
+      lieu: event.location,
+      adresse: event.address,
+      description: event.description,
+      horaire: event.isRecurring
+        ? formatRecurrence(event.recurrence, event.startTime)
+        : formatEventDate(event.startDate, event.endDate, event.startTime),
+      prix: event.price || 'Non communiqué',
+      recurrent: event.isRecurring,
+      special: event.featured,
+      site_web: event.website,
+      telephone: event.phone,
+    }));
+
+    // Si aucun événement en DB, retourner les événements par défaut
+    if (evenements.length === 0) {
+      return getDefaultEvents(startDate, endDate, category);
+    }
+
+    return {
+      periode: {
+        du: startDate.toISOString().split('T')[0],
+        au: endDate.toISOString().split('T')[0],
+      },
+      categorie_filtree: category === 'ALL' ? 'toutes' : category.toLowerCase(),
+      nombre_evenements: evenements.length,
+      evenements: evenements,
+      conseil: 'Pour les événements spéciaux, je vous recommande de réserver à l\'avance. Souhaitez-vous que j\'ajoute une activité à votre séjour ?',
+    };
+  } catch (error) {
+    console.error('Erreur getEvents:', error);
+    // Fallback sur les événements par défaut
+    return getDefaultEvents(startDate, endDate, category);
+  }
+}
+
+function formatRecurrence(recurrence: string | null, startTime: string | null): string {
+  if (!recurrence) return startTime ? `À ${startTime}` : 'Horaires variables';
+  
+  const time = startTime ? ` à ${startTime}` : '';
+  
+  if (recurrence === 'daily') return `Tous les jours${time}`;
+  if (recurrence.startsWith('weekly:')) {
+    const days = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const dayNum = parseInt(recurrence.split(':')[1]);
+    return `Tous les ${days[dayNum]}s${time}`;
+  }
+  if (recurrence.startsWith('monthly:')) {
+    const dayOfMonth = recurrence.split(':')[1];
+    return `Le ${dayOfMonth} de chaque mois${time}`;
+  }
+  
+  return startTime ? `À ${startTime}` : 'Horaires variables';
+}
+
+function formatEventDate(startDate: Date, endDate: Date | null, startTime: string | null): string {
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
+  const start = startDate.toLocaleDateString('fr-FR', options);
+  const time = startTime ? ` à ${startTime}` : '';
+  
+  if (!endDate || startDate.toDateString() === endDate.toDateString()) {
+    return `${start}${time}`;
+  }
+  
+  const end = endDate.toLocaleDateString('fr-FR', options);
+  return `Du ${start} au ${end}${time}`;
+}
+
+function getDefaultEvents(startDate: Date, endDate: Date, category: string) {
+  // Événements par défaut si la DB est vide
+  const allEvents = [
+    {
+      nom: 'Soirée Gnaoua au Café Clock',
+      categorie: 'musique',
+      lieu: 'Café Clock, Médina',
+      description: 'Concert de musique Gnaoua traditionnelle avec dîner marocain',
+      horaire: 'Tous les jeudis, 20h30',
+      prix: '200 MAD (avec dîner)',
+      recurrent: true,
+    },
+    {
+      nom: 'Spectacle Fantasia',
+      categorie: 'tradition',
+      lieu: 'Chez Ali, Route de Casablanca',
+      description: 'Dîner-spectacle avec cavaliers berbères, acrobates et folklore marocain',
+      horaire: 'Tous les soirs, 20h',
+      prix: '450 MAD',
+      recurrent: true,
+    },
+    {
+      nom: 'Visite guidée des souks',
+      categorie: 'culture',
+      lieu: 'Place Jemaa el-Fna',
+      description: 'Découverte des artisans et secrets de la Médina avec un guide local',
+      horaire: 'Tous les jours, 9h30',
+      prix: '350 MAD/personne',
+      recurrent: true,
+    },
+    {
+      nom: 'Cours de cuisine marocaine',
+      categorie: 'gastronomie',
+      lieu: 'La Maison Arabe',
+      description: 'Apprenez à préparer tajine, couscous et pastilla avec un chef',
+      horaire: 'Lundi, Mercredi, Vendredi, 10h',
+      prix: '800 MAD',
+      recurrent: true,
+    },
+  ];
+
+  const filteredEvents = category === 'ALL' 
+    ? allEvents 
+    : allEvents.filter(e => e.categorie === category.toLowerCase());
+
+  return {
+    periode: {
+      du: startDate.toISOString().split('T')[0],
+      au: endDate.toISOString().split('T')[0],
+    },
+    categorie_filtree: category === 'ALL' ? 'toutes' : category.toLowerCase(),
+    nombre_evenements: filteredEvents.length,
+    evenements: filteredEvents,
+    source: 'Événements par défaut - Ajoutez vos événements via l\'admin',
+    conseil: 'Pour les événements spéciaux, je vous recommande de réserver à l\'avance.',
+  };
+}
+
+// --- GET CITY TIPS ---
+async function getCityTips(args: { topic: string; district?: string }) {
+  const tips: Record<string, any> = {
+    quartiers: {
+      titre: 'Guide des quartiers de Marrakech',
+      quartiers: {
+        'Médina': {
+          description: 'Le cœur historique, classé UNESCO. Ruelles labyrinthiques, souks, riads.',
+          ambiance: 'Authentique, animée, dépaysante',
+          pour_qui: 'Amateurs de culture et d\'immersion',
+          a_voir: ['Place Jemaa el-Fna', 'Medersa Ben Youssef', 'Souks', 'Palais Bahia'],
+          conseils: ['GPS inutile - suivez votre instinct ou un guide', 'Négociez toujours (divisez le premier prix par 3)', 'Visitez tôt le matin pour éviter la foule'],
+        },
+        'Guéliz': {
+          description: 'La ville nouvelle, créée sous le protectorat français. Cafés, boutiques modernes.',
+          ambiance: 'Moderne, européenne, pratique',
+          pour_qui: 'Ceux qui veulent mixer tradition et confort moderne',
+          a_voir: ['Avenue Mohammed V', 'Jardin Majorelle (à côté)', 'Galeries d\'art'],
+          conseils: ['Idéal pour le shopping de marques', 'Restaurants internationaux', 'Vie nocturne animée'],
+        },
+        'Hivernage': {
+          description: 'Quartier résidentiel chic avec grands hôtels et casinos.',
+          ambiance: 'Luxueuse, calme, verdoyante',
+          pour_qui: 'Voyageurs cherchant le grand luxe',
+          a_voir: ['Théâtre Royal', 'Palais des Congrès', 'Jardins'],
+          conseils: ['Les meilleurs spas de la ville', 'Proche de tout en taxi'],
+        },
+        'Palmeraie': {
+          description: '100 000 palmiers, villas somptueuses, clubs et resorts.',
+          ambiance: 'Exclusive, paisible, nature',
+          pour_qui: 'Familles, couples, groupes cherchant l\'espace et l\'intimité',
+          a_voir: ['Balade en quad ou chameau', 'Golf', 'Piscines privées'],
+          conseils: ['20 min du centre - prévoir taxi/voiture', 'Parfait pour se ressourcer'],
+        },
+        'Mellah': {
+          description: 'L\'ancien quartier juif, avec son marché aux épices et son cimetière historique.',
+          ambiance: 'Authentique, moins touristique',
+          pour_qui: 'Curieux d\'histoire et de diversité culturelle',
+          a_voir: ['Synagogue Slat al-Azama', 'Marché aux épices', 'Place des Ferblantiers'],
+          conseils: ['Épices moins chères qu\'en Médina', 'Artisans du cuivre'],
+        },
+      },
+    },
+    transport: {
+      titre: 'Se déplacer à Marrakech',
+      options: {
+        'Petits taxis': {
+          description: 'Taxis beiges pour 3 personnes max, intra-muros uniquement',
+          prix: '10-30 MAD selon distance',
+          conseils: ['Exigez le compteur ou négociez AVANT', 'Ayez de la monnaie', 'Careem/Roby plus fiables'],
+        },
+        'Grands taxis': {
+          description: 'Mercedes beiges, pour les trajets hors ville (aéroport, excursions)',
+          prix: '150-200 MAD vers aéroport',
+          conseils: ['Prix fixe, négociez avant', 'Partagés ou privés'],
+        },
+        'Calèches': {
+          description: 'Balade romantique autour des remparts',
+          prix: '150-300 MAD/heure',
+          conseils: ['Négociez le circuit et le prix avant', 'Évitez aux heures chaudes'],
+        },
+        'Apps VTC': {
+          description: 'Careem et Roby - comme Uber',
+          avantages: 'Prix fixés, paiement par carte, pas de négociation',
+        },
+        'Location voiture': {
+          conseils: ['Évitez de conduire en Médina', 'Parking gardé : 20-30 MAD', 'Permis international recommandé'],
+        },
+      },
+    },
+    argent: {
+      titre: 'Argent et pourboires',
+      devise: 'Dirham marocain (MAD)',
+      taux_indicatif: '1€ ≈ 11 MAD',
+      paiement: {
+        carte: 'Acceptée dans hôtels, restaurants chics, grandes boutiques',
+        cash: 'Indispensable pour souks, petits commerces, taxis, pourboires',
+      },
+      pourboires: {
+        restaurant: '10% (souvent non inclus)',
+        hotel: '20-50 MAD/jour pour le ménage',
+        guide: '100-200 MAD/demi-journée',
+        taxi: 'Arrondir au supérieur',
+        hammam: '50-100 MAD',
+      },
+      negociation: {
+        ou: 'Souks, marchés, taxis sans compteur',
+        comment: ['Commencez à 30% du prix annoncé', 'Restez souriant et patient', 'Prêt à partir = meilleur prix', 'Prix fixes en boutiques modernes'],
+      },
+    },
+    culture: {
+      titre: 'Us et coutumes',
+      respect: {
+        vetements: 'Épaules et genoux couverts recommandés, surtout en Médina et mosquées',
+        mosquees: 'Entrée interdite aux non-musulmans (sauf Hassan II à Casablanca)',
+        photos: 'Demander permission pour photographier les gens',
+        ramadan: 'Évitez de manger/boire/fumer en public pendant le jeûne',
+      },
+      salutations: {
+        bonjour: 'Salam (سلام) ou Salam Aleikoum',
+        merci: 'Choukran (شكرا)',
+        oui_non: 'Iyeh / La',
+      },
+      hospitalite: 'Le thé à la menthe est un signe d\'accueil - l\'accepter est poli',
+    },
+    securite: {
+      titre: 'Sécurité et précautions',
+      niveau: 'Marrakech est une ville sûre pour les touristes',
+      conseils: [
+        'Gardez vos objets de valeur discrets',
+        'Évitez les ruelles isolées la nuit',
+        'Méfiez-vous des "faux guides" trop insistants',
+        'Eau du robinet non potable - buvez de l\'eau en bouteille',
+        'Négociez les prix AVANT tout service',
+      ],
+      arnaques_courantes: [
+        'Le guide "gratuit" qui demande de l\'argent à la fin',
+        'Le souk "fermé" - on vous emmène ailleurs',
+        'L\'ami qui veut vous montrer sa coopérative familiale',
+      ],
+      numeros_utiles: {
+        police: '19',
+        tourisme: '+212 524 43 61 31',
+        urgences: '15',
+      },
+    },
+    shopping: {
+      titre: 'Shopping et souks',
+      specialites: {
+        'Cuir': 'Babouches, sacs, poufs - quartier des tanneurs',
+        'Tapis': 'Berbères (géométriques) ou citadins (floraux)',
+        'Épices': 'Safran, ras el hanout, cumin - Mellah moins cher',
+        'Poterie': 'Tajines, céramique de Safi',
+        'Argan': 'Huile alimentaire et cosmétique',
+        'Lanternes': 'Fer forgé et verre coloré',
+      },
+      conseils: [
+        'Comparez les prix dans plusieurs boutiques',
+        'Le premier prix est 2-3x le prix réel',
+        'Achetez en fin de journée (vendeurs plus flexibles)',
+        'Demandez un certificat pour les tapis de valeur',
+      ],
+    },
+    restaurants: {
+      titre: 'Où manger à Marrakech',
+      types: {
+        'Gastronomique': {
+          exemples: ['La Mamounia', 'Dar Yacout', 'Le Jardin'],
+          budget: '500-1500 MAD/personne',
+        },
+        'Bon rapport qualité-prix': {
+          exemples: ['Nomad', 'Café des Épices', 'La Famille'],
+          budget: '150-300 MAD/personne',
+        },
+        'Street food': {
+          exemples: ['Jemaa el-Fna (soir)', 'Chez Bejgueni', 'Haj Mustapha'],
+          budget: '30-80 MAD',
+          incontournables: ['Tangia', 'Méchoui', 'Brochettes', 'Jus d\'orange frais'],
+        },
+      },
+      conseils: [
+        'Réservez pour les restaurants gastronomiques',
+        'Street food Jemaa el-Fna : choisissez les stands avec du monde',
+        'Évitez les restaurants qui vous hèlent depuis la rue',
+      ],
+    },
+    vie_nocturne: {
+      titre: 'Sortir le soir',
+      options: {
+        'Rooftops': {
+          exemples: ['Café Arabe', 'Kosybar', 'Le Salama'],
+          description: 'Coucher de soleil et cocktails',
+        },
+        'Clubs': {
+          exemples: ['Theatro', 'So Lounge', 'Pacha'],
+          quartier: 'Hivernage principalement',
+          dress_code: 'Smart casual, pas de baskets',
+        },
+        'Dîner-spectacle': {
+          exemples: ['Comptoir Darna', 'Lotus Club'],
+          description: 'Danse du ventre et musique live',
+        },
+      },
+      conseil: 'La vie nocturne se concentre à Guéliz et Hivernage. La Médina est calme après 22h.',
+    },
+    excursions: {
+      titre: 'Excursions depuis Marrakech',
+      journee: [
+        {
+          destination: 'Vallée de l\'Ourika',
+          duree: '1 jour',
+          distance: '60 km',
+          a_voir: 'Cascades, villages berbères, jardins de safran',
+        },
+        {
+          destination: 'Essaouira',
+          duree: '1 jour',
+          distance: '180 km',
+          a_voir: 'Port de pêche, médina UNESCO, plage, musique gnaoua',
+        },
+        {
+          destination: 'Cascades d\'Ouzoud',
+          duree: '1 jour',
+          distance: '150 km',
+          a_voir: 'Plus hautes cascades du Maroc (110m), singes magots',
+        },
+        {
+          destination: 'Ait Ben Haddou',
+          duree: '1 jour',
+          distance: '190 km',
+          a_voir: 'Ksar UNESCO, décor de Game of Thrones et Gladiator',
+        },
+      ],
+      plusieurs_jours: [
+        {
+          destination: 'Désert de Merzouga',
+          duree: '2-3 jours',
+          a_voir: 'Dunes de l\'Erg Chebbi, nuit en bivouac, lever de soleil',
+        },
+        {
+          destination: 'Fès via le Moyen Atlas',
+          duree: '2-3 jours',
+          a_voir: 'Cèdres, singes, médina de Fès (plus grande du monde)',
+        },
+      ],
+    },
+    general: {
+      titre: 'Conseils généraux pour Marrakech',
+      resume: [
+        '🕌 Respect : épaules/genoux couverts en Médina',
+        '💰 Cash : indispensable pour les souks et taxis',
+        '🗣️ Négociation : divisez le premier prix par 3',
+        '🚕 Taxis : compteur ou prix fixé AVANT',
+        '☀️ Soleil : crème solaire et chapeau toute l\'année',
+        '💧 Eau : buvez uniquement de l\'eau en bouteille',
+        '🍵 Thé : accepter = politesse',
+        '📱 Apps : Careem pour les VTC, pas de Uber',
+      ],
+    },
+  };
+
+  // Si un quartier spécifique est demandé avec le topic "quartiers"
+  if (args.topic === 'quartiers' && args.district) {
+    const districtInfo = tips.quartiers.quartiers[args.district];
+    if (districtInfo) {
+      return {
+        quartier: args.district,
+        ...districtInfo,
+      };
+    }
+  }
+
+  const result = tips[args.topic] || tips.general;
+  
+  return {
+    ...result,
+    source: 'Guide local Marrakech Access',
+    mise_a_jour: new Date().toISOString().split('T')[0],
   };
 }

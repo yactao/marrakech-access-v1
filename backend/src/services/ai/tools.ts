@@ -207,6 +207,78 @@ export const tools: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'add_to_cart',
+      description: 'Prépare les données pour ajouter un bien ou un extra au panier du client. Utilise cet outil quand le client dit vouloir réserver un bien ou ajouter un extra sans confirmer immédiatement la réservation. Retourne les infos nécessaires pour que le frontend mette à jour le panier.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: { 
+            type: 'string', 
+            enum: ['property', 'extra'],
+            description: 'Type d\'élément à ajouter : property pour un hébergement, extra pour une expérience' 
+          },
+          slug: { 
+            type: 'string', 
+            description: 'Slug du bien (requis si type=property)' 
+          },
+          extra_name: { 
+            type: 'string', 
+            description: 'Nom de l\'extra (requis si type=extra)' 
+          },
+          check_in: { 
+            type: 'string', 
+            description: 'Date d\'arrivée au format YYYY-MM-DD (pour property)' 
+          },
+          check_out: { 
+            type: 'string', 
+            description: 'Date de départ au format YYYY-MM-DD (pour property)' 
+          },
+          guests: { 
+            type: 'number', 
+            description: 'Nombre de voyageurs (pour property)' 
+          },
+          quantity: { 
+            type: 'number', 
+            description: 'Quantité (pour extra, défaut: 1)' 
+          },
+        },
+        required: ['type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_recommendations',
+      description: 'Génère des recommandations personnalisées basées sur le profil du client, ses préférences ou le contexte de sa demande. Utilise cet outil pour suggérer des biens, extras ou activités adaptés.',
+      parameters: {
+        type: 'object',
+        properties: {
+          context: { 
+            type: 'string', 
+            description: 'Contexte ou type de séjour : romantique, famille, groupe_amis, affaires, luxe, budget, aventure, detente' 
+          },
+          budget_per_night: { 
+            type: 'number', 
+            description: 'Budget maximum par nuit en MAD' 
+          },
+          guests: { 
+            type: 'number', 
+            description: 'Nombre de voyageurs' 
+          },
+          interests: { 
+            type: 'array', 
+            items: { type: 'string' },
+            description: 'Centres d\'intérêt : culture, gastronomie, sport, bien-etre, shopping, nature, fete' 
+          },
+        },
+        required: ['context'],
+      },
+    },
+  },
 ];
 
 // =============================================
@@ -238,6 +310,11 @@ export async function executeTool(name: string, args: any, userId?: string | nul
       return getEvents(args);
     case 'get_city_tips':
       return getCityTips(args);
+    // Nouveaux tools Panier & Recommandations
+    case 'add_to_cart':
+      return addToCart(args);
+    case 'get_recommendations':
+      return getRecommendations(args);
     default:
       return { error: `Outil inconnu : ${name}` };
   }
@@ -1253,5 +1330,329 @@ async function getCityTips(args: { topic: string; district?: string }) {
     ...result,
     source: 'Guide local Marrakech Access',
     mise_a_jour: new Date().toISOString().split('T')[0],
+  };
+}
+
+// --- ADD TO CART ---
+async function addToCart(args: {
+  type: 'property' | 'extra';
+  slug?: string;
+  extra_name?: string;
+  check_in?: string;
+  check_out?: string;
+  guests?: number;
+  quantity?: number;
+}) {
+  if (args.type === 'property') {
+    if (!args.slug) {
+      return { error: 'Le slug du bien est requis pour ajouter un hébergement au panier.' };
+    }
+
+    const property = await prisma.property.findFirst({
+      where: { slug: args.slug, status: 'ACTIVE' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        type: true,
+        district: true,
+        capacity: true,
+        priceLowSeason: true,
+        priceHighSeason: true,
+        cleaningFee: true,
+        minNights: true,
+        currency: true,
+      },
+    });
+
+    if (!property) {
+      return { error: 'Ce bien n\'existe pas ou n\'est plus disponible.' };
+    }
+
+    // Calculer les nuits si dates fournies
+    let nights = 0;
+    let totalEstimate = 0;
+    if (args.check_in && args.check_out) {
+      const checkIn = new Date(args.check_in);
+      const checkOut = new Date(args.check_out);
+      nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (nights < property.minNights) {
+        return { 
+          error: `Séjour minimum de ${property.minNights} nuit(s) requis pour ce bien.`,
+          minimum_nights: property.minNights,
+        };
+      }
+      
+      const month = checkIn.getMonth() + 1;
+      const isHighSeason = [3, 4, 5, 10, 11, 12].includes(month);
+      const pricePerNight = isHighSeason ? Number(property.priceHighSeason) : Number(property.priceLowSeason);
+      totalEstimate = pricePerNight * nights + Number(property.cleaningFee);
+    }
+
+    return {
+      action: 'add_property_to_cart',
+      success: true,
+      message: `J'ai préparé ${property.name} pour votre panier.`,
+      property: {
+        id: property.id,
+        name: property.name,
+        slug: property.slug,
+        type: property.type,
+        district: property.district,
+        capacity: property.capacity,
+        priceLowSeason: Number(property.priceLowSeason),
+        priceHighSeason: Number(property.priceHighSeason),
+        cleaningFee: Number(property.cleaningFee),
+        minNights: property.minNights,
+        currency: property.currency,
+      },
+      dates: args.check_in && args.check_out ? {
+        checkIn: args.check_in,
+        checkOut: args.check_out,
+        nights,
+      } : null,
+      guests: args.guests || 1,
+      estimatedTotal: totalEstimate > 0 ? `${totalEstimate.toLocaleString()} ${property.currency}` : null,
+      instructions: 'Cliquez sur "Ajouter au panier" pour confirmer, ou modifiez vos dates sur la fiche du bien.',
+      link: `/properties/${property.slug}`,
+    };
+  }
+
+  if (args.type === 'extra') {
+    if (!args.extra_name) {
+      return { error: 'Le nom de l\'extra est requis.' };
+    }
+
+    const extra = await prisma.extra.findFirst({
+      where: { 
+        name: { contains: args.extra_name, mode: 'insensitive' },
+        available: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        description: true,
+        price: true,
+        priceUnit: true,
+        duration: true,
+      },
+    });
+
+    if (!extra) {
+      // Chercher des extras similaires
+      const similarExtras = await prisma.extra.findMany({
+        where: { available: true },
+        select: { name: true, category: true },
+        take: 5,
+      });
+      
+      return { 
+        error: `Extra "${args.extra_name}" non trouvé.`,
+        suggestions: similarExtras.map(e => e.name),
+      };
+    }
+
+    const quantity = args.quantity || 1;
+    const total = Number(extra.price) * quantity;
+
+    return {
+      action: 'add_extra_to_cart',
+      success: true,
+      message: `J'ai préparé "${extra.name}" pour votre panier.`,
+      extra: {
+        id: extra.id,
+        name: extra.name,
+        category: extra.category,
+        description: extra.description,
+        price: Number(extra.price),
+        priceUnit: extra.priceUnit,
+        duration: extra.duration,
+        quantity,
+      },
+      total: `${total.toLocaleString()} MAD`,
+      instructions: 'L\'extra sera ajouté à votre réservation.',
+    };
+  }
+
+  return { error: 'Type non reconnu. Utilisez "property" ou "extra".' };
+}
+
+// --- GET RECOMMENDATIONS ---
+async function getRecommendations(args: {
+  context: string;
+  budget_per_night?: number;
+  guests?: number;
+  interests?: string[];
+}) {
+  const recommendations: any = {
+    properties: [],
+    extras: [],
+    tips: [],
+  };
+
+  // Logique de recommandation basée sur le contexte
+  const contextProfiles: Record<string, { 
+    propertyTypes: string[], 
+    districts: string[], 
+    extraCategories: string[],
+    tips: string[]
+  }> = {
+    romantique: {
+      propertyTypes: ['RIAD', 'DAR', 'SUITE'],
+      districts: ['Médina', 'Hivernage'],
+      extraCategories: ['bien-etre', 'culinaire'],
+      tips: [
+        '💑 Réservez un dîner aux chandelles sur un rooftop',
+        '🌹 Demandez une décoration romantique à l\'arrivée',
+        '🧖 Optez pour un hammam en couple',
+      ],
+    },
+    famille: {
+      propertyTypes: ['VILLA', 'APPARTEMENT'],
+      districts: ['Palmeraie', 'Amelkis'],
+      extraCategories: ['excursion', 'loisir'],
+      tips: [
+        '👨‍👩‍👧‍👦 Les villas avec piscine sont idéales pour les enfants',
+        '🐪 Une balade à dos de chameau plaît à tous les âges',
+        '🎨 Atelier poterie ou cuisine pour occuper les petits',
+      ],
+    },
+    groupe_amis: {
+      propertyTypes: ['VILLA', 'RIAD'],
+      districts: ['Palmeraie', 'Guéliz'],
+      extraCategories: ['loisir', 'excursion', 'culinaire'],
+      tips: [
+        '🎉 Les villas avec piscine permettent de faire la fête',
+        '🏍️ Quad ou buggy dans le désert pour l\'adrénaline',
+        '🍽️ Réservez un chef à domicile pour une soirée mémorable',
+      ],
+    },
+    affaires: {
+      propertyTypes: ['APPARTEMENT', 'SUITE'],
+      districts: ['Guéliz', 'Hivernage'],
+      extraCategories: ['transport'],
+      tips: [
+        '💼 Choisissez un hébergement avec wifi haut débit',
+        '🚗 Réservez un chauffeur pour vos déplacements',
+        '🍸 Guéliz offre les meilleurs espaces de coworking',
+      ],
+    },
+    luxe: {
+      propertyTypes: ['VILLA', 'RIAD'],
+      districts: ['Palmeraie', 'Hivernage'],
+      extraCategories: ['bien-etre', 'culinaire', 'transport'],
+      tips: [
+        '✨ Demandez un service de conciergerie premium',
+        '🚁 Excursion en hélicoptère vers l\'Atlas disponible',
+        '👨‍🍳 Chef étoilé à domicile sur réservation',
+      ],
+    },
+    budget: {
+      propertyTypes: ['APPARTEMENT', 'DAR'],
+      districts: ['Médina', 'Mellah'],
+      extraCategories: ['excursion'],
+      tips: [
+        '💰 La Médina offre le meilleur rapport qualité-prix',
+        '🚶 Explorez à pied pour économiser sur les transports',
+        '🍜 Street food à Jemaa el-Fna pour manger bien et pas cher',
+      ],
+    },
+    aventure: {
+      propertyTypes: ['VILLA', 'RIAD'],
+      districts: ['Palmeraie', 'Amelkis'],
+      extraCategories: ['excursion', 'loisir'],
+      tips: [
+        '🏔️ Randonnée dans l\'Atlas à 1h de Marrakech',
+        '🏍️ Quad, buggy et motocross dans le désert d\'Agafay',
+        '🎈 Vol en montgolfière au lever du soleil',
+      ],
+    },
+    detente: {
+      propertyTypes: ['RIAD', 'VILLA'],
+      districts: ['Palmeraie', 'Médina'],
+      extraCategories: ['bien-etre'],
+      tips: [
+        '🧖 Hammam traditionnel obligatoire',
+        '🧘 Yoga et méditation disponibles',
+        '🌿 Les riads avec jardin intérieur sont parfaits pour se ressourcer',
+      ],
+    },
+  };
+
+  const profile = contextProfiles[args.context] || contextProfiles.detente;
+
+  // Recherche des propriétés
+  const propertyWhere: any = {
+    status: 'ACTIVE',
+    type: { in: profile.propertyTypes },
+  };
+  
+  if (args.budget_per_night) {
+    propertyWhere.priceLowSeason = { lte: args.budget_per_night };
+  }
+  if (args.guests) {
+    propertyWhere.capacity = { gte: args.guests };
+  }
+
+  const properties = await prisma.property.findMany({
+    where: propertyWhere,
+    select: {
+      name: true,
+      slug: true,
+      type: true,
+      district: true,
+      priceLowSeason: true,
+      shortDesc: true,
+      capacity: true,
+    },
+    orderBy: { priceLowSeason: 'asc' },
+    take: 3,
+  });
+
+  recommendations.properties = properties.map(p => ({
+    nom: p.name,
+    type: p.type,
+    quartier: p.district,
+    prix: `${p.priceLowSeason} MAD/nuit`,
+    capacite: `${p.capacity} voyageurs`,
+    description: p.shortDesc,
+    lien: `/properties/${p.slug}`,
+  }));
+
+  // Recherche des extras
+  const extras = await prisma.extra.findMany({
+    where: {
+      available: true,
+      category: { in: profile.extraCategories },
+    },
+    select: {
+      name: true,
+      category: true,
+      price: true,
+      priceUnit: true,
+      description: true,
+    },
+    take: 4,
+  });
+
+  recommendations.extras = extras.map(e => ({
+    nom: e.name,
+    categorie: e.category,
+    prix: `${e.price} MAD/${e.priceUnit}`,
+    description: e.description,
+  }));
+
+  recommendations.tips = profile.tips;
+
+  return {
+    contexte: args.context,
+    message: `Voici mes recommandations pour un séjour ${args.context} à Marrakech :`,
+    hebergements: recommendations.properties.length > 0 
+      ? recommendations.properties 
+      : 'Aucun hébergement ne correspond exactement à vos critères, mais je peux élargir la recherche.',
+    experiences: recommendations.extras,
+    conseils_personnalises: recommendations.tips,
   };
 }

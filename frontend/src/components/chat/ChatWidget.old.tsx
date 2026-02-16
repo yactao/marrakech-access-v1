@@ -183,11 +183,9 @@ export default function ChatWidget() {
           onClick={handleOpen}
           style={{ animation: 'bounceIn 0.4s ease-out' }}
         >
-          <div className="relative bg-gradient-to-br from-dark-light to-dark border border-gold/30 rounded-2xl rounded-br-sm p-4 shadow-2xl">
+          <div className="relative bg-dark-light border border-gold/20 rounded-2xl rounded-br-sm p-4 shadow-2xl">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center flex-shrink-0 shadow-md border border-gold/20">
-                <span className="text-lg">🎩</span>
-              </div>
+              <img src="/images/fez.svg" alt="Al" className="w-8 h-8 object-contain flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-[10px] text-gold font-semibold mb-1">Al — Votre Majordome</p>
                 <p className="text-xs text-white/70 leading-relaxed">{proactiveBubble}</p>
@@ -248,17 +246,18 @@ export default function ChatWidget() {
           className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${
             isOpen
               ? 'bg-dark-lighter border border-white/10'
-              : 'bg-gradient-to-br from-gold/20 to-gold/5 border-2 border-gold/50 hover:border-gold hover:scale-110 hover:shadow-gold/30 hover:shadow-xl'
+              : 'bg-dark-light border border-gold/30 hover:border-gold hover:scale-110 hover:shadow-gold/20 hover:shadow-xl'
           }`}
         >
           {isOpen ? (
             <span className="text-white/60 text-xl">✕</span>
           ) : (
             <div className="relative">
-              {/* Avatar avec le fez */}
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center animate-float shadow-lg">
-                <span className="text-2xl">🎩</span>
-              </div>
+              <img
+                src="/images/fez.svg"
+                alt="Majordome"
+                className="w-9 h-9 object-contain animate-float"
+              />
               {/* Badge notification */}
               {!hasInteracted && (
                 <span className="absolute -top-1 -right-1 flex items-center justify-center">
@@ -276,21 +275,16 @@ export default function ChatWidget() {
              style={{ animation: 'slideUp 0.3s ease-out' }}>
 
           {/* Header */}
-          <div className="px-5 py-4 bg-gradient-to-r from-dark-light to-dark border-b border-gold/10 flex items-center gap-3">
+          <div className="px-5 py-4 bg-dark-light border-b border-white/5 flex items-center gap-3">
             <div className="relative">
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center shadow-lg border-2 border-gold/30">
-                <span className="text-xl">🎩</span>
-              </div>
-              <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-dark-light"></span>
+              <img src="/images/fez.svg" alt="Al" className="w-10 h-10 object-contain" />
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-dark-light"></span>
             </div>
             <div className="flex-1">
-              <h3 className="font-playfair text-base font-semibold text-gold">Al</h3>
-              <p className="text-[11px] text-emerald-400 font-inter flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Votre majordome • En ligne
-              </p>
+              <h3 className="font-playfair text-sm font-semibold text-white">Al</h3>
+              <p className="text-[10px] text-emerald-400 font-inter">Votre majordome • En ligne</p>
             </div>
-            <span className="text-[9px] text-white/20 font-inter bg-white/5 px-2 py-1 rounded-full">IA</span>
+            <span className="text-[10px] text-white/20 font-inter">Propulsé par IA</span>
           </div>
 
           {/* Messages */}
@@ -298,8 +292,8 @@ export default function ChatWidget() {
 
             {isTypingGreeting && (
               <div className="flex items-end gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center flex-shrink-0 shadow-md">
-                  <span className="text-sm">🎩</span>
+                <div className="w-7 h-7 rounded-full bg-dark-lighter flex items-center justify-center flex-shrink-0">
+                  <img src="/images/fez.svg" alt="M" className="w-5 h-5 object-contain" />
                 </div>
                 <div className="bg-dark-lighter rounded-2xl rounded-bl-sm px-4 py-3">
                   <div className="flex gap-1">
@@ -314,8 +308,8 @@ export default function ChatWidget() {
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'items-end gap-2'}`}>
                 {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center flex-shrink-0 shadow-md">
-                    <span className="text-sm">🎩</span>
+                  <div className="w-7 h-7 rounded-full bg-dark-lighter flex items-center justify-center flex-shrink-0">
+                    <img src="/images/fez.svg" alt="M" className="w-5 h-5 object-contain" />
                   </div>
                 )}
                 <div
@@ -331,8 +325,8 @@ export default function ChatWidget() {
 
             {loading && (
               <div className="flex items-end gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center flex-shrink-0 shadow-md">
-                  <span className="text-sm">🎩</span>
+                <div className="w-7 h-7 rounded-full bg-dark-lighter flex items-center justify-center flex-shrink-0">
+                  <img src="/images/fez.svg" alt="M" className="w-5 h-5 object-contain" />
                 </div>
                 <div className="bg-dark-lighter rounded-2xl rounded-bl-sm px-4 py-3">
                   <div className="flex gap-1">
