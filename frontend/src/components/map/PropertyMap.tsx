@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 interface Property {
@@ -44,140 +44,237 @@ const typeIcons: Record<string, string> = {
   'SUITE': '🛏️',
 };
 
-export default function PropertyMap({ properties, selectedSlug, onMarkerClick, height = '400px' }: PropertyMapProps) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+export default function PropertyMap({ properties, selectedSlug, onMarkerClick, height = '500px' }: PropertyMapProps) {
+  const [MapComponents, setMapComponents] = useState<any>(null);
   const [hoveredProperty, setHoveredProperty] = useState<Property | null>(null);
 
+  // Charger react-leaflet dynamiquement (client-side only)
   useEffect(() => {
-    // Charger Leaflet dynamiquement
-    const loadLeaflet = async () => {
-      if (typeof window === 'undefined') return;
+    (async () => {
+      const L = await import('leaflet');
+      const { MapContainer, TileLayer, Marker, Popup } = await import('react-leaflet');
       
-      // Charger le CSS
-      if (!document.getElementById('leaflet-css')) {
-        const link = document.createElement('link');
-        link.id = 'leaflet-css';
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-      }
-
-      // Charger le JS
-      if (!(window as any).L) {
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.onload = () => setIsLoaded(true);
-        document.body.appendChild(script);
-      } else {
-        setIsLoaded(true);
-      }
-    };
-
-    loadLeaflet();
-  }, []);
-
-  useEffect(() => {
-    if (!isLoaded || !mapRef.current || mapInstanceRef.current) return;
-
-    const L = (window as any).L;
-    if (!L) return;
-
-    // Centrer sur Marrakech
-    const map = L.map(mapRef.current, {
-      center: [31.6295, -7.9811],
-      zoom: 12,
-      scrollWheelZoom: false,
-    });
-
-    // Ajouter le layer de tuiles (style sombre)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 19,
-    }).addTo(map);
-
-    mapInstanceRef.current = map;
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [isLoaded]);
-
-  useEffect(() => {
-    if (!mapInstanceRef.current || !isLoaded) return;
-
-    const L = (window as any).L;
-    const map = mapInstanceRef.current;
-
-    // Supprimer les anciens marqueurs
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current = [];
-
-    // Ajouter les nouveaux marqueurs
-    const bounds: any[] = [];
-
-    properties.forEach((property) => {
-      let lat = property.latitude;
-      let lng = property.longitude;
-
-      // Utiliser les coordonnées du quartier si pas de coords précises
-      if (!lat || !lng) {
-        const districtCoord = districtCoords[property.district];
-        if (districtCoord) {
-          // Ajouter un léger décalage aléatoire pour éviter les superpositions
-          lat = districtCoord.lat + (Math.random() - 0.5) * 0.01;
-          lng = districtCoord.lng + (Math.random() - 0.5) * 0.01;
-        }
-      }
-
-      if (!lat || !lng) return;
-
-      bounds.push([lat, lng]);
-
-      // Créer un marqueur personnalisé
-      const isSelected = property.slug === selectedSlug;
-      const icon = L.divIcon({
-        className: 'custom-marker',
-        html: `
-          <div class="marker-container ${isSelected ? 'selected' : ''}">
-            <div class="marker-icon">${typeIcons[property.type] || '📍'}</div>
-            <div class="marker-price">${Math.round(parseFloat(property.priceLowSeason) / 1000)}k</div>
-          </div>
-        `,
-        iconSize: [50, 60],
-        iconAnchor: [25, 60],
+      // Fix pour les icônes Leaflet
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
       });
 
-      const marker = L.marker([lat, lng], { icon })
-        .addTo(map)
-        .on('click', () => {
-          if (onMarkerClick) onMarkerClick(property.slug);
-        })
-        .on('mouseover', () => setHoveredProperty(property))
-        .on('mouseout', () => setHoveredProperty(null));
+      setMapComponents({ L, MapContainer, TileLayer, Marker, Popup });
+    })();
+  }, []);
 
-      markersRef.current.push(marker);
-    });
+  if (!MapComponents) {
+    return (
+      <div 
+        className="rounded-xl bg-dark-lighter flex items-center justify-center border border-white/10"
+        style={{ height }}
+      >
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-gold border-t-transparent rounded-full mx-auto mb-3"></div>
+          <span className="text-white/40 text-sm">Chargement de la carte...</span>
+        </div>
+      </div>
+    );
+  }
 
-    // Ajuster la vue pour montrer tous les marqueurs
-    if (bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+  const { L, MapContainer, TileLayer, Marker, Popup } = MapComponents;
+
+  // Préparer les propriétés avec coordonnées
+  const propertiesWithCoords = properties.map(property => {
+    let lat = property.latitude;
+    let lng = property.longitude;
+
+    if (!lat || !lng) {
+      const districtCoord = districtCoords[property.district];
+      if (districtCoord) {
+        lat = districtCoord.lat + (Math.random() - 0.5) * 0.01;
+        lng = districtCoord.lng + (Math.random() - 0.5) * 0.01;
+      }
     }
-  }, [properties, selectedSlug, isLoaded, onMarkerClick]);
+
+    return { ...property, lat, lng };
+  }).filter(p => p.lat && p.lng);
+
+  // Créer une icône personnalisée
+  const createCustomIcon = (property: Property, isSelected: boolean) => {
+    const icon = typeIcons[property.type] || '📍';
+    const price = Math.round(parseFloat(property.priceLowSeason) / 1000);
+    
+    return L.divIcon({
+      className: 'custom-marker',
+      html: `
+        <div class="marker-wrapper ${isSelected ? 'selected' : ''}">
+          <div class="marker-icon">${icon}</div>
+          <div class="marker-price">${price}k</div>
+        </div>
+      `,
+      iconSize: [50, 60],
+      iconAnchor: [25, 60],
+      popupAnchor: [0, -60],
+    });
+  };
 
   return (
-    <div className="relative rounded-xl overflow-hidden border border-white/10">
-      {/* Carte */}
-      <div ref={mapRef} style={{ height, width: '100%' }} className="z-0" />
+    <div className="relative rounded-xl overflow-hidden border border-white/10" style={{ height }}>
+      {/* CSS pour les marqueurs */}
+      <style jsx global>{`
+        @import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+        
+        .custom-marker {
+          background: transparent !important;
+          border: none !important;
+        }
+        .marker-wrapper {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+          transition: transform 0.2s ease;
+        }
+        .marker-wrapper:hover {
+          transform: scale(1.15);
+        }
+        .marker-wrapper.selected {
+          transform: scale(1.2);
+        }
+        .marker-icon {
+          width: 44px;
+          height: 44px;
+          background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+          border: 3px solid #D4AF37;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .marker-wrapper.selected .marker-icon {
+          border-color: #FFD700;
+          box-shadow: 0 0 25px rgba(212, 175, 55, 0.6);
+        }
+        .marker-price {
+          background: linear-gradient(135deg, #D4AF37 0%, #B8960C 100%);
+          color: #1a1a1a;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 3px 8px;
+          border-radius: 6px;
+          margin-top: -10px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+        .leaflet-container {
+          background: #1a1a1a !important;
+          font-family: inherit;
+        }
+        .leaflet-popup-content-wrapper {
+          background: #1a1a1a !important;
+          border: 1px solid rgba(212, 175, 55, 0.3) !important;
+          border-radius: 12px !important;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.5) !important;
+        }
+        .leaflet-popup-content {
+          margin: 0 !important;
+          color: white;
+        }
+        .leaflet-popup-tip {
+          background: #1a1a1a !important;
+          border: 1px solid rgba(212, 175, 55, 0.3) !important;
+        }
+        .leaflet-popup-close-button {
+          color: rgba(255,255,255,0.5) !important;
+          font-size: 20px !important;
+          padding: 8px !important;
+        }
+        .leaflet-popup-close-button:hover {
+          color: #D4AF37 !important;
+        }
+        .leaflet-control-attribution {
+          background: rgba(26, 26, 26, 0.9) !important;
+          color: rgba(255, 255, 255, 0.4) !important;
+          font-size: 10px !important;
+        }
+        .leaflet-control-attribution a {
+          color: #D4AF37 !important;
+        }
+        .leaflet-control-zoom {
+          border: none !important;
+        }
+        .leaflet-control-zoom a {
+          background: #1a1a1a !important;
+          color: #D4AF37 !important;
+          border: 1px solid rgba(212, 175, 55, 0.3) !important;
+        }
+        .leaflet-control-zoom a:hover {
+          background: #2a2a2a !important;
+        }
+      `}</style>
+
+      <MapContainer
+        center={[31.6295, -7.9811]}
+        zoom={12}
+        style={{ height: '100%', width: '100%' }}
+        scrollWheelZoom={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        />
+        
+        {propertiesWithCoords.map((property) => (
+          <Marker
+            key={property.id}
+            position={[property.lat!, property.lng!]}
+            icon={createCustomIcon(property, property.slug === selectedSlug)}
+            eventHandlers={{
+              click: () => onMarkerClick?.(property.slug),
+              mouseover: () => setHoveredProperty(property),
+              mouseout: () => setHoveredProperty(null),
+            }}
+          >
+            <Popup>
+              <div className="w-56">
+                {property.coverPhoto && (
+                  <div className="h-28 -mx-0 -mt-0 overflow-hidden rounded-t-lg">
+                    <img 
+                      src={property.coverPhoto} 
+                      alt={property.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-lg">{typeIcons[property.type]}</span>
+                    <h4 className="font-semibold text-white text-sm truncate">{property.name}</h4>
+                  </div>
+                  <p className="text-xs text-white/50 mb-2">📍 {property.district}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-white/40">
+                      {property.bedrooms} ch. · {property.capacity} pers.
+                    </span>
+                    <span className="text-gold font-bold">
+                      {parseFloat(property.priceLowSeason).toLocaleString()} MAD
+                    </span>
+                  </div>
+                  <Link 
+                    href={`/properties/${property.slug}`}
+                    className="mt-3 block w-full text-center py-2 bg-gold hover:bg-gold-dark text-dark text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    Voir le bien →
+                  </Link>
+                </div>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
 
       {/* Légende */}
-      <div className="absolute bottom-4 left-4 bg-dark/90 backdrop-blur-sm rounded-lg p-3 border border-white/10 z-10">
+      <div className="absolute bottom-4 left-4 bg-dark/90 backdrop-blur-sm rounded-lg p-3 border border-white/10 z-[1000]">
         <p className="text-[10px] uppercase tracking-wider text-white/40 mb-2">Types de biens</p>
         <div className="flex flex-wrap gap-2">
           {Object.entries(typeIcons).map(([type, icon]) => (
@@ -187,97 +284,6 @@ export default function PropertyMap({ properties, selectedSlug, onMarkerClick, h
           ))}
         </div>
       </div>
-
-      {/* Popup au survol */}
-      {hoveredProperty && (
-        <div className="absolute top-4 right-4 w-64 bg-dark/95 backdrop-blur-sm rounded-lg border border-gold/20 overflow-hidden z-20 shadow-xl">
-          {hoveredProperty.coverPhoto && (
-            <div className="h-24 overflow-hidden">
-              <img 
-                src={hoveredProperty.coverPhoto} 
-                alt={hoveredProperty.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
-          <div className="p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span>{typeIcons[hoveredProperty.type]}</span>
-              <h4 className="font-playfair text-sm font-semibold text-white truncate">{hoveredProperty.name}</h4>
-            </div>
-            <p className="text-xs text-white/40 mb-2">📍 {hoveredProperty.district}</p>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-white/40">
-                {hoveredProperty.bedrooms} ch. · {hoveredProperty.capacity} pers.
-              </span>
-              <span className="text-gold font-semibold text-sm">
-                {parseFloat(hoveredProperty.priceLowSeason).toLocaleString()} MAD
-              </span>
-            </div>
-            <Link 
-              href={`/properties/${hoveredProperty.slug}`}
-              className="mt-2 block text-center text-xs text-gold hover:text-gold-dark transition-colors"
-            >
-              Voir le bien →
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Styles pour les marqueurs */}
-      <style jsx global>{`
-        .custom-marker {
-          background: transparent !important;
-          border: none !important;
-        }
-        .marker-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          cursor: pointer;
-          transition: transform 0.2s ease;
-        }
-        .marker-container:hover {
-          transform: scale(1.1);
-        }
-        .marker-container.selected {
-          transform: scale(1.2);
-        }
-        .marker-icon {
-          width: 40px;
-          height: 40px;
-          background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
-          border: 2px solid #D4AF37;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 18px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        }
-        .marker-container.selected .marker-icon {
-          border-color: #FFD700;
-          box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
-        }
-        .marker-price {
-          background: #D4AF37;
-          color: #1a1a1a;
-          font-size: 10px;
-          font-weight: 700;
-          padding: 2px 6px;
-          border-radius: 4px;
-          margin-top: -8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        .leaflet-control-attribution {
-          background: rgba(26, 26, 26, 0.8) !important;
-          color: rgba(255, 255, 255, 0.4) !important;
-          font-size: 10px !important;
-        }
-        .leaflet-control-attribution a {
-          color: #D4AF37 !important;
-        }
-      `}</style>
     </div>
   );
 }
