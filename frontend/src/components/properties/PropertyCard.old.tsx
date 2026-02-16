@@ -18,73 +18,15 @@ interface PropertyCardProps {
     avgRating: number | null;
     reviewsCount: number;
   };
-  compact?: boolean;
 }
 
 const typeLabels: Record<string, string> = {
   VILLA: 'Villa', RIAD: 'Riad', APPARTEMENT: 'Appartement', DAR: 'Dar', SUITE: 'Suite',
 };
 
-const typeIcons: Record<string, string> = {
-  VILLA: '🏡', RIAD: '🕌', APPARTEMENT: '🏢', DAR: '🏠', SUITE: '🛏️',
-};
-
-export default function PropertyCard({ property, compact = false }: PropertyCardProps) {
+export default function PropertyCard({ property }: PropertyCardProps) {
   const price = parseFloat(property.priceLowSeason);
 
-  // Version compacte pour la vue carte
-  if (compact) {
-    return (
-      <Link href={`/properties/${property.slug}`}
-            className="group flex gap-4 p-3 rounded-lg border border-white/5 hover:border-gold/20 transition-all duration-300 bg-dark-light">
-        
-        {/* Image */}
-        <div className="relative w-28 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-dark-lighter">
-          {property.coverPhoto ? (
-            <img
-              src={property.coverPhoto}
-              alt={property.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-3xl text-white/20">
-              {typeIcons[property.type] || '✨'}
-            </div>
-          )}
-          {property.avgRating && (
-            <span className="absolute top-1 right-1 px-1.5 py-0.5 bg-gold/90 rounded text-[9px] font-semibold text-dark">
-              ★ {property.avgRating}
-            </span>
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm">{typeIcons[property.type]}</span>
-              <h3 className="font-playfair text-sm font-semibold text-white group-hover:text-gold transition-colors truncate">
-                {property.name}
-              </h3>
-            </div>
-            <p className="text-xs text-white/40 mt-0.5">📍 {property.district}</p>
-          </div>
-          
-          <div className="flex items-end justify-between">
-            <span className="text-[11px] text-white/30">
-              {property.bedrooms} ch. · {property.capacity} pers.
-            </span>
-            <div className="text-right">
-              <span className="font-playfair text-base font-bold text-gold">{price.toLocaleString()}</span>
-              <span className="text-[10px] text-white/30 ml-0.5">{property.currency}</span>
-            </div>
-          </div>
-        </div>
-      </Link>
-    );
-  }
-
-  // Version standard (grille)
   return (
     <Link href={`/properties/${property.slug}`}
           className="group block rounded-lg overflow-hidden border border-white/5 hover:border-gold/20 transition-all duration-500 bg-dark-light">
@@ -101,7 +43,7 @@ export default function PropertyCard({ property, compact = false }: PropertyCard
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-white/10 text-6xl group-hover:scale-105 transition-transform duration-700">
-            {typeIcons[property.type] || '✨'}
+            {property.type === 'VILLA' ? '🏡' : property.type === 'RIAD' ? '🕌' : property.type === 'APPARTEMENT' ? '🏢' : property.type === 'DAR' ? '🏠' : '✨'}
           </div>
         )}
 
