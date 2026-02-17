@@ -2,31 +2,18 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import { v2 as cloudinary } from 'cloudinary';
+import streamifier from 'streamifier';
 
-// Dossier de destination
-const uploadDir = path.join(__dirname, '../../../frontend/public/images/uploads');
-
-// Créer le dossier s'il n'existe pas
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Config multer
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const name = file.originalname
-      .replace(ext, '')
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    cb(null, `${name}-${Date.now()}${ext}`);
-  },
+// Configuration Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dskvolthd',
+  api_key: process.env.CLOUDINARY_API_KEY || '295977787385832',
+  api_secret: process.env.CLOUDINARY_API_SECRET || 'oceveUjYuj2xw_yxxb4B3V7u2oA',
 });
+
+// Config multer (stockage en mémoire pour Cloudinary)
+const storage = multer.memoryStorage();
 
 const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -43,7 +30,27 @@ export const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
 });
 
-// POST /api/admin/upload — Upload une image
+// Upload vers Cloudinary
+const uploadToCloudinary = (buffer: Buffer, folder: string): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `marrakech-access/${folder}`,
+        resource_type: 'image',
+        transformation: [
+          { width: 1200, height: 800, crop: 'limit', quality: 'auto' }
+        ]
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+    streamifier.createReadStream(buffer).pipe(uploadStream);
+  });
+};
+
+// POST /api/admin/upload — Upload une image vers Cloudinary
 export async function uploadImage(req: AuthRequest, res: Response): Promise<void> {
   try {
     if (!req.file) {
@@ -51,16 +58,20 @@ export async function uploadImage(req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const publicPath = `/images/uploads/${req.file.filename}`;
+    const folder = req.body.folder || 'uploads';
+    const result = await uploadToCloudinary(req.file.buffer, folder);
 
     res.json({
       message: 'Image uploadée avec succès',
-      path: publicPath,
-      filename: req.file.filename,
+      path: result.secure_url,
+      publicId: result.public_id,
+      filename: req.file.originalname,
       size: req.file.size,
+      width: result.width,
+      height: result.height,
     });
   } catch (error) {
-    console.error('Erreur upload:', error);
+    console.error('Erreur upload Cloudinary:', error);
     res.status(500).json({ error: 'Erreur lors de l\'upload' });
   }
 }
@@ -73,7 +84,6 @@ export async function updatePropertyPhotos(req: AuthRequest, res: Response): Pro
 
     const property = await prisma.property.update({
       where: { id },
-
       data: {
         ...(coverPhoto !== undefined && { coverPhoto }),
         ...(photos !== undefined && { photos }),
@@ -91,7 +101,7 @@ export async function updatePropertyPhotos(req: AuthRequest, res: Response): Pro
 // PUT /api/admin/extras/:id/photo — Mettre à jour la photo d'un extra
 export async function updateExtraPhoto(req: AuthRequest, res: Response): Promise<void> {
   try {
-  const id = req.params.id as string;
+    const id = req.params.id as string;
     const { photo } = req.body;
 
     const extra = await prisma.extra.update({
@@ -107,48 +117,27 @@ export async function updateExtraPhoto(req: AuthRequest, res: Response): Promise
   }
 }
 
-// GET /api/admin/media — Lister toutes les images uploadées
+// GET /api/admin/media — Lister les images (depuis Cloudinary + DB)
 export async function listMedia(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const uploadsDir = path.join(__dirname, '../../../frontend/public/images/uploads');
-    const imagesDir = path.join(__dirname, '../../../frontend/public/images');
-
-    const files: { path: string; name: string; folder: string }[] = [];
-
-    // Images uploadées
-    if (fs.existsSync(uploadsDir)) {
-      fs.readdirSync(uploadsDir).forEach((f) => {
-        if (/\.(jpg|jpeg|png|webp)$/i.test(f)) {
-          files.push({ path: `/images/uploads/${f}`, name: f, folder: 'uploads' });
-        }
+    // Récupérer les images depuis Cloudinary
+    let cloudinaryFiles: { path: string; name: string; folder: string; publicId: string }[] = [];
+    
+    try {
+      const result = await cloudinary.api.resources({
+        type: 'upload',
+        prefix: 'marrakech-access/',
+        max_results: 100,
       });
-    }
-
-    // Images existantes (racine)
-    fs.readdirSync(imagesDir).forEach((f) => {
-      if (/\.(jpg|jpeg|png|webp)$/i.test(f)) {
-        files.push({ path: `/images/${f}`, name: f, folder: 'images' });
-      }
-    });
-
-    // Images biens
-    const biensDir = path.join(imagesDir, 'biens');
-    if (fs.existsSync(biensDir)) {
-      fs.readdirSync(biensDir).forEach((f) => {
-        if (/\.(jpg|jpeg|png|webp)$/i.test(f)) {
-          files.push({ path: `/images/biens/${f}`, name: f, folder: 'biens' });
-        }
-      });
-    }
-
-    // Images extras
-    const extrasDir = path.join(imagesDir, 'extras');
-    if (fs.existsSync(extrasDir)) {
-      fs.readdirSync(extrasDir).forEach((f) => {
-        if (/\.(jpg|jpeg|png|webp)$/i.test(f)) {
-          files.push({ path: `/images/extras/${f}`, name: f, folder: 'extras' });
-        }
-      });
+      
+      cloudinaryFiles = result.resources.map((r: any) => ({
+        path: r.secure_url,
+        name: r.public_id.split('/').pop() || r.public_id,
+        folder: r.folder || 'uploads',
+        publicId: r.public_id,
+      }));
+    } catch (e) {
+      console.log('Cloudinary listing skipped:', e);
     }
 
     // Propriétés avec photos
@@ -163,9 +152,28 @@ export async function listMedia(req: AuthRequest, res: Response): Promise<void> 
       orderBy: { sortOrder: 'asc' },
     });
 
-    res.json({ files, properties, extras });
+    res.json({ files: cloudinaryFiles, properties, extras });
   } catch (error) {
     console.error('Erreur listMedia:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+// DELETE /api/admin/media/:publicId — Supprimer une image de Cloudinary
+export async function deleteMedia(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const publicId = req.params.publicId as string;
+    
+    if (!publicId) {
+      res.status(400).json({ error: 'publicId requis' });
+      return;
+    }
+    
+    await cloudinary.uploader.destroy(publicId);
+    
+    res.json({ message: 'Image supprimée' });
+  } catch (error) {
+    console.error('Erreur deleteMedia:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 }

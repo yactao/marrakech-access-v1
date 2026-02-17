@@ -5,12 +5,20 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import streamifier from 'streamifier';
 
-// Configuration Cloudinary
+// ✅ FIX BONUS — Clés Cloudinary via variables d'environnement UNIQUEMENT
+// Plus jamais de credentials en dur dans le code source.
+// Ajoutez dans Railway : CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dskvolthd',
-  api_key: process.env.CLOUDINARY_API_KEY || '295977787385832',
-  api_secret: process.env.CLOUDINARY_API_SECRET || 'oceveUjYuj2xw_yxxb4B3V7u2oA',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Vérification au démarrage
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.error('❌ Variables Cloudinary manquantes : CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET');
+  // On ne crash pas le serveur — l'upload sera simplement indisponible
+}
 
 // Config multer (stockage en mémoire pour Cloudinary)
 const storage = multer.memoryStorage();
@@ -38,8 +46,8 @@ const uploadToCloudinary = (buffer: Buffer, folder: string): Promise<any> => {
         folder: `marrakech-access/${folder}`,
         resource_type: 'image',
         transformation: [
-          { width: 1200, height: 800, crop: 'limit', quality: 'auto' }
-        ]
+          { width: 1200, height: 800, crop: 'limit', quality: 'auto' },
+        ],
       },
       (error, result) => {
         if (error) reject(error);
@@ -55,6 +63,11 @@ export async function uploadImage(req: AuthRequest, res: Response): Promise<void
   try {
     if (!req.file) {
       res.status(400).json({ error: 'Aucun fichier envoyé' });
+      return;
+    }
+
+    if (!process.env.CLOUDINARY_API_KEY) {
+      res.status(503).json({ error: 'Service d\'upload temporairement indisponible (configuration manquante).' });
       return;
     }
 
@@ -80,15 +93,14 @@ export async function uploadImage(req: AuthRequest, res: Response): Promise<void
 export async function updatePropertyPhotos(req: AuthRequest, res: Response): Promise<void> {
   try {
     const id = req.params.id as string;
-    const { coverPhoto, photos } = req.body;
+    const { photos, coverPhoto } = req.body;
 
     const property = await prisma.property.update({
       where: { id },
       data: {
-        ...(coverPhoto !== undefined && { coverPhoto }),
-        ...(photos !== undefined && { photos }),
+        photos: photos || [],
+        coverPhoto: coverPhoto || null,
       },
-      select: { id: true, name: true, coverPhoto: true, photos: true },
     });
 
     res.json({ message: 'Photos mises à jour', property });
@@ -98,7 +110,7 @@ export async function updatePropertyPhotos(req: AuthRequest, res: Response): Pro
   }
 }
 
-// PUT /api/admin/extras/:id/photo — Mettre à jour la photo d'un extra
+// PUT /api/admin/extras/:id/photo
 export async function updateExtraPhoto(req: AuthRequest, res: Response): Promise<void> {
   try {
     const id = req.params.id as string;
@@ -107,7 +119,6 @@ export async function updateExtraPhoto(req: AuthRequest, res: Response): Promise
     const extra = await prisma.extra.update({
       where: { id },
       data: { photo },
-      select: { id: true, name: true, photo: true },
     });
 
     res.json({ message: 'Photo mise à jour', extra });
@@ -117,63 +128,33 @@ export async function updateExtraPhoto(req: AuthRequest, res: Response): Promise
   }
 }
 
-// GET /api/admin/media — Lister les images (depuis Cloudinary + DB)
+// GET /api/admin/media — Lister les médias Cloudinary
 export async function listMedia(req: AuthRequest, res: Response): Promise<void> {
   try {
-    // Récupérer les images depuis Cloudinary
-    let cloudinaryFiles: { path: string; name: string; folder: string; publicId: string }[] = [];
-    
-    try {
-      const result = await cloudinary.api.resources({
-        type: 'upload',
-        prefix: 'marrakech-access/',
-        max_results: 100,
-      });
-      
-      cloudinaryFiles = result.resources.map((r: any) => ({
-        path: r.secure_url,
-        name: r.public_id.split('/').pop() || r.public_id,
-        folder: r.folder || 'uploads',
-        publicId: r.public_id,
-      }));
-    } catch (e) {
-      console.log('Cloudinary listing skipped:', e);
-    }
-
-    // Propriétés avec photos
-    const properties = await prisma.property.findMany({
-      select: { id: true, name: true, slug: true, coverPhoto: true, photos: true },
-      orderBy: { name: 'asc' },
-    });
-
-    // Extras avec photos
-    const extras = await prisma.extra.findMany({
-      select: { id: true, name: true, category: true, photo: true },
-      orderBy: { sortOrder: 'asc' },
-    });
-
-    res.json({ files: cloudinaryFiles, properties, extras });
-  } catch (error) {
-    console.error('Erreur listMedia:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-}
-
-// DELETE /api/admin/media/:publicId — Supprimer une image de Cloudinary
-export async function deleteMedia(req: AuthRequest, res: Response): Promise<void> {
-  try {
-    const publicId = req.params.publicId as string;
-    
-    if (!publicId) {
-      res.status(400).json({ error: 'publicId requis' });
+    if (!process.env.CLOUDINARY_API_KEY) {
+      res.status(503).json({ error: 'Service media indisponible (configuration manquante).' });
       return;
     }
-    
-    await cloudinary.uploader.destroy(publicId);
-    
-    res.json({ message: 'Image supprimée' });
+
+    const result = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: 'marrakech-access/',
+      max_results: 100,
+    });
+
+    const media = result.resources.map((r: any) => ({
+      publicId: r.public_id,
+      url: r.secure_url,
+      format: r.format,
+      width: r.width,
+      height: r.height,
+      size: r.bytes,
+      createdAt: r.created_at,
+    }));
+
+    res.json({ media, total: media.length });
   } catch (error) {
-    console.error('Erreur deleteMedia:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error('Erreur listMedia:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des médias' });
   }
 }
