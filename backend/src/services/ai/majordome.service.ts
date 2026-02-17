@@ -7,7 +7,12 @@ const client = new OpenAI({
   apiKey: env.AI_API_KEY,
   baseURL: env.AI_BASE_URL,
 });
-console.log('🔑 AI Config:', { baseURL: env.AI_BASE_URL, model: env.AI_MODEL, keyStart: env.AI_API_KEY.substring(0, 10) + '...' });
+
+console.log('🔑 AI Config:', {
+  baseURL: env.AI_BASE_URL,
+  model: env.AI_MODEL,
+  keyStart: env.AI_API_KEY.substring(0, 10) + '...',
+});
 
 function buildSystemPrompt(user: any): string {
   return `Tu es le Majordome de Marrakech Access, un concierge de luxe IA pour une plateforme de location haut de gamme à Marrakech.
@@ -46,17 +51,71 @@ ${user ? `Prénom: ${user.firstName}, Rôle: ${user.role}` : 'Visiteur non conne
 Date du jour: ${new Date().toLocaleDateString('fr-FR')}`;
 }
 
+// ✅ FIX #2 — Type pour les conversations anonymes (stockées en mémoire, pas en DB)
+// Clé : conversationId (UUID côté client), Valeur : tableau de messages
+// Les visiteurs non connectés n'ont plus d'entrées fantômes dans la table users/conversations.
+const anonymousConversations = new Map<string, any[]>();
+
+// Nettoyage automatique des conversations anonymes de plus de 2h
+// pour éviter une fuite mémoire sur le serveur Railway
+setInterval(() => {
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  const cutoff = Date.now() - TWO_HOURS;
+  for (const [id, msgs] of anonymousConversations.entries()) {
+    // On stocke le timestamp dans le premier message
+    if (msgs[0]?._timestamp && msgs[0]._timestamp < cutoff) {
+      anonymousConversations.delete(id);
+    }
+  }
+}, 30 * 60 * 1000); // toutes les 30 minutes
+
 export async function chat(
   message: string,
   conversationId: string | null,
   userId: string | null
 ): Promise<{ reply: string; conversationId: string }> {
 
-  // 1. Charger ou créer la conversation
+  // ──────────────────────────────────────────────────────
+  // CAS A : Visiteur non connecté → conversation en mémoire
+  // Aucune écriture en base, pas de user fantôme.
+  // ──────────────────────────────────────────────────────
+  if (!userId) {
+    // Générer un ID de conversation anonyme si premier message
+    const anonId = conversationId || `anon-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // Charger ou initialiser l'historique en mémoire
+    let anonMessages = anonymousConversations.get(anonId) || [];
+
+    // Marquer le timestamp de création pour le nettoyage
+    if (anonMessages.length === 0) {
+      anonMessages.push({ _timestamp: Date.now() });
+    }
+
+    // Ajouter le message utilisateur
+    const conversationMessages = anonMessages.filter((m) => m.role); // exclure le timestamp interne
+    conversationMessages.push({ role: 'user', content: message });
+
+    // Appel IA
+    const reply = await runAIWithTools(conversationMessages, null);
+
+    // Sauvegarder en mémoire (avec le timestamp interne)
+    conversationMessages.push({ role: 'assistant', content: reply });
+    anonymousConversations.set(anonId, [
+      { _timestamp: anonMessages[0]._timestamp },
+      ...conversationMessages,
+    ]);
+
+    return { reply, conversationId: anonId };
+  }
+
+  // ──────────────────────────────────────────────────────
+  // CAS B : Utilisateur connecté → conversation en base MySQL
+  // ──────────────────────────────────────────────────────
   let conversation: any;
   let messages: any[] = [];
 
-  if (conversationId) {
+  // Charger la conversation existante
+  if (conversationId && !conversationId.startsWith('anon-')) {
     conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
     });
@@ -64,104 +123,28 @@ export async function chat(
       messages = conversation.messages as any[];
     }
   }
-if (!conversation) {
-    // Si pas de userId, créer un guest temporaire
-    let finalUserId = userId;
-    if (!finalUserId) {
-      const guestUser = await prisma.user.create({
-        data: {
-          email: `guest-${Date.now()}@temp.marrakech-access.com`,
-          passwordHash: 'no-auth',
-          firstName: 'Visiteur',
-          lastName: 'Anonyme',
-          role: 'GUEST',
-        },
-      });
-      finalUserId = guestUser.id;
-    }
 
+  // Créer une nouvelle conversation si besoin
+  if (!conversation) {
     conversation = await prisma.conversation.create({
       data: {
-        userId: finalUserId,
+        userId,
         context: {},
         messages: [],
       },
     });
   }
- 
-  // 2. Charger le user si connecté
-  let user = null;
-  if (userId && userId !== 'anonymous') {
-    user = await prisma.user.findUnique({ where: { id: userId } });
-  }
 
-  // 3. Ajouter le message user
+  // Charger les infos utilisateur pour le prompt
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+
+  // Ajouter le message utilisateur
   messages.push({ role: 'user', content: message });
 
-  // 4. Appel IA avec tools
-  let response = await client.chat.completions.create({
-    model: env.AI_MODEL,
-    temperature: 0.4,
-    max_tokens: 1024,
-    messages: [
-      { role: 'system', content: buildSystemPrompt(user) },
-      ...messages.slice(-20), // Garder les 20 derniers messages pour le contexte
-    ],
-    tools,
-    tool_choice: 'auto',
-  });
+  // Appel IA avec les tools
+  const reply = await runAIWithTools(messages, userId, user);
 
-  let assistantMessage = response.choices[0].message;
-
-  // 5. Boucle tool calling (le Majordome peut enchaîner plusieurs outils)
-  let loopCount = 0;
-  while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && loopCount < 5) {
-    loopCount++;
-
-    // Ajouter la réponse de l'assistant avec les tool_calls
-    messages.push({
-      role: 'assistant',
-      content: assistantMessage.content || '',
-      tool_calls: assistantMessage.tool_calls,
-    });
-
-    // Exécuter chaque tool call
-    for (const toolCall of assistantMessage.tool_calls) {
-      if (toolCall.type !== 'function') continue;
-      
-      const args = JSON.parse(toolCall.function.arguments);
-      console.log(`🔧 Tool: ${toolCall.function.name}`, args);
-
-      const result = await executeTool(toolCall.function.name, args, userId);
-      console.log(`✅ Résultat:`, JSON.stringify(result).substring(0, 200));
-
-      messages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Relancer l'IA avec les résultats des tools
-    response = await client.chat.completions.create({
-      model: env.AI_MODEL,
-      temperature: 0.4,
-      max_tokens: 1024,
-      messages: [
-        { role: 'system', content: buildSystemPrompt(user) },
-        ...messages.slice(-20),
-      ],
-      tools,
-      tool_choice: 'auto',
-    });
-
-    assistantMessage = response.choices[0].message;
-  }
-
-  // 6. Extraire la réponse texte
-  const reply = assistantMessage.content || "Je suis désolé, je n'ai pas pu traiter votre demande. Pouvez-vous reformuler ?";
-
-  // 7. Sauvegarder
+  // Sauvegarder en base
   messages.push({ role: 'assistant', content: reply });
 
   await prisma.conversation.update({
@@ -172,8 +155,88 @@ if (!conversation) {
     },
   });
 
-  return {
-    reply,
-    conversationId: conversation.id,
-  };
+  return { reply, conversationId: conversation.id };
+}
+
+// ──────────────────────────────────────────────────────
+// Fonction interne : boucle tool calling DeepSeek
+// Extraite pour être réutilisée par les deux cas (connecté / anonyme)
+// ──────────────────────────────────────────────────────
+async function runAIWithTools(
+  messages: any[],
+  userId: string | null,
+  user?: any
+): Promise<string> {
+  let response = await client.chat.completions.create({
+    model: env.AI_MODEL,
+    temperature: 0.4,
+    max_tokens: 1024,
+    messages: [
+      { role: 'system', content: buildSystemPrompt(user || null) },
+      ...messages.slice(-20),
+    ],
+    tools,
+    tool_choice: 'auto',
+  });
+
+  let assistantMessage = response.choices[0].message;
+
+  // Boucle tool calling (max 5 itérations)
+  let loopCount = 0;
+  while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && loopCount < 5) {
+    loopCount++;
+
+    messages.push({
+      role: 'assistant',
+      content: assistantMessage.content || '',
+      tool_calls: assistantMessage.tool_calls,
+    });
+
+    for (const toolCall of assistantMessage.tool_calls) {
+      if (toolCall.type !== 'function') continue;
+
+      // ✅ FIX bonus — try/catch sur JSON.parse pour éviter crash si DeepSeek renvoie JSON malformé
+      let args: any = {};
+      try {
+        args = JSON.parse(toolCall.function.arguments);
+      } catch (e) {
+        console.error(`❌ JSON.parse échoué pour tool ${toolCall.function.name}:`, toolCall.function.arguments);
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: 'Arguments invalides reçus de l\'IA.' }),
+        });
+        continue;
+      }
+
+      console.log(`🔧 Tool: ${toolCall.function.name}`, args);
+      const result = await executeTool(toolCall.function.name, args, userId);
+      console.log(`✅ Résultat:`, JSON.stringify(result).substring(0, 200));
+
+      messages.push({
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(result),
+      });
+    }
+
+    response = await client.chat.completions.create({
+      model: env.AI_MODEL,
+      temperature: 0.4,
+      max_tokens: 1024,
+      messages: [
+        { role: 'system', content: buildSystemPrompt(user || null) },
+        ...messages.slice(-20),
+      ],
+      tools,
+      tool_choice: 'auto',
+    });
+
+    assistantMessage = response.choices[0].message;
+  }
+
+  return (
+    assistantMessage.content ||
+    "Je suis désolé, je n'ai pas pu traiter votre demande. Pouvez-vous reformuler ?"
+  );
 }
