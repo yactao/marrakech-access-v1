@@ -530,18 +530,31 @@ function MediaManager({ token, apiUrl }: { token: string; apiUrl: string }) {
   const [filterFolder, setFilterFolder] = useState<string>('all');
   const [message, setMessage] = useState('');
 
- const fetchMedia = async () => {
+const fetchMedia = async () => {
     try {
       const res = await fetch(`${apiUrl}/admin/media`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      console.log('MEDIA DATA:', data);
-      if (data.files && data.properties && data.extras) {
-        setMediaData(data);
+      
+      console.log('MEDIA DATA RECUE:', data);
+
+      // --- CORRECTION DE L'ADAPTATION DES DONNÉES ---
+      // L'API renvoie { media: [...] }, on le transforme pour le frontend
+      const adaptedData = {
+        files: data.files || data.media || [], // On accepte 'files' OU 'media'
+        properties: data.properties || [],     // On met un tableau vide si absent pour éviter le crash
+        extras: data.extras || []              // On met un tableau vide si absent
+      };
+
+      // Si on a bien reçu une liste de fichiers (même vide), on valide
+      if (Array.isArray(adaptedData.files)) {
+        setMediaData(adaptedData);
       } else {
-        console.error('Format inattendu:', data);
+        console.error('Format toujours inattendu:', data);
       }
+      // -----------------------------------------------
+
     } catch (e) {
       console.error('Erreur chargement médias:', e);
     } finally {
