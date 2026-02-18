@@ -128,33 +128,69 @@ export async function updateExtraPhoto(req: AuthRequest, res: Response): Promise
   }
 }
 
-// GET /api/admin/media — Lister les médias Cloudinary
+// GET /api/admin/media — Lister les médias Cloudinary ET les données pour l'admin
 export async function listMedia(req: AuthRequest, res: Response): Promise<void> {
   try {
-    if (!process.env.CLOUDINARY_API_KEY) {
-      res.status(503).json({ error: 'Service media indisponible (configuration manquante).' });
-      return;
+    // 1. Récupérer les images depuis Cloudinary
+    let media = [];
+    if (process.env.CLOUDINARY_API_KEY) {
+      try {
+        const result = await cloudinary.api.resources({
+          type: 'upload',
+          prefix: 'marrakech-access/', // Assurez-vous que c'est le bon dossier
+          max_results: 100,
+        });
+
+        media = result.resources.map((r: any) => ({
+          publicId: r.public_id,
+          url: r.secure_url,
+          format: r.format,
+          width: r.width,
+          height: r.height,
+          size: r.bytes,
+          createdAt: r.created_at,
+          // Mapping pour que le frontend s'y retrouve
+          path: r.secure_url, 
+          name: r.public_id.split('/').pop(),
+          folder: r.folder || 'cloudinary'
+        }));
+      } catch (cloudError) {
+        console.error("Erreur Cloudinary (ignorée pour ne pas bloquer l'admin):", cloudError);
+      }
     }
 
-    const result = await cloudinary.api.resources({
-      type: 'upload',
-      prefix: 'marrakech-access/',
-      max_results: 100,
+    // 2. Récupérer les Propriétés (pour les listes déroulantes)
+    const properties = await prisma.property.findMany({
+      select: {
+        id: true,
+        name: true,
+        coverPhoto: true,
+        photos: true,
+      },
+      orderBy: { name: 'asc' }
     });
 
-    const media = result.resources.map((r: any) => ({
-      publicId: r.public_id,
-      url: r.secure_url,
-      format: r.format,
-      width: r.width,
-      height: r.height,
-      size: r.bytes,
-      createdAt: r.created_at,
-    }));
+    // 3. Récupérer les Extras (pour les listes déroulantes)
+    const extras = await prisma.extra.findMany({
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        photo: true,
+      },
+      orderBy: { name: 'asc' }
+    });
 
-    res.json({ media, total: media.length });
+    // 4. Renvoyer le TOUT en un seul objet JSON
+    res.json({
+      files: media,        // Le frontend attend 'files'
+      properties: properties,
+      extras: extras,
+      total: media.length
+    });
+
   } catch (error) {
     console.error('Erreur listMedia:', error);
-    res.status(500).json({ error: 'Erreur lors de la récupération des médias' });
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération des médias' });
   }
 }
