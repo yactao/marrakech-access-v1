@@ -46,6 +46,7 @@ export default function PropertyDetailPage() {
   const [showExtras, setShowExtras] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [selectedExtra, setSelectedExtra] = useState<any | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -269,14 +270,14 @@ export default function PropertyDetailPage() {
                     return (
                       <div key={extra.id} className={`rounded-lg border overflow-hidden transition-all duration-300 ${inCart ? 'border-gold/40 bg-gold/5' : 'border-white/5 bg-dark-light hover:border-white/10'}`}>
                         {extra.photo && (
-                          <div className="h-28 overflow-hidden">
-                            <img src={extra.photo} alt={extra.name} className="w-full h-full object-cover" />
+                          <div className="h-28 overflow-hidden cursor-pointer" onClick={() => setSelectedExtra(extra)}>
+                            <img src={extra.photo} alt={extra.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                           </div>
                         )}
                         <div className="p-4 flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <h4 className="text-sm font-semibold text-white/80">{extra.name}</h4>
-                            <p className="text-xs text-white/30 mt-1 line-clamp-1">{extra.description}</p>
+                          <div className="flex-1 cursor-pointer" onClick={() => setSelectedExtra(extra)}>
+                            <h4 className="text-sm font-semibold text-white/80 hover:text-gold transition-colors">{extra.name}</h4>
+                            <p className="text-xs text-white/30 mt-1 line-clamp-2">{extra.description}</p>
                             <p className="text-xs text-gold mt-1">{parseFloat(extra.price).toLocaleString()} MAD/{extra.priceUnit}</p>
                           </div>
                           <button onClick={() => {
@@ -406,6 +407,73 @@ export default function PropertyDetailPage() {
           </div>
         </div>
       </section>
+
+      {/* MODAL DÉTAIL EXTRA */}
+      {selectedExtra && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+             onClick={() => setSelectedExtra(null)}>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+          <div className="relative bg-dark-light border border-white/10 rounded-lg max-w-lg w-full overflow-hidden"
+               onClick={(e) => e.stopPropagation()}>
+            {selectedExtra.photo && (
+              <div className="h-48 overflow-hidden">
+                <img src={selectedExtra.photo} alt={selectedExtra.name} className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div className="p-6">
+              <button onClick={() => setSelectedExtra(null)}
+                      className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white/60 hover:text-white flex items-center justify-center transition-colors">
+                ✕
+              </button>
+              <h2 className="font-playfair text-2xl font-bold text-white">{selectedExtra.name}</h2>
+              <p className="mt-4 text-sm text-white/50 leading-relaxed">{selectedExtra.description}</p>
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                {selectedExtra.duration && (
+                  <div className="p-3 rounded-lg bg-dark border border-white/5">
+                    <span className="text-[10px] uppercase tracking-wider text-white/30 block">Durée</span>
+                    <span className="text-sm text-white/70 mt-1 block">🕐 {selectedExtra.duration}</span>
+                  </div>
+                )}
+                {selectedExtra.maxPersons && (
+                  <div className="p-3 rounded-lg bg-dark border border-white/5">
+                    <span className="text-[10px] uppercase tracking-wider text-white/30 block">Capacité</span>
+                    <span className="text-sm text-white/70 mt-1 block">👥 Max {selectedExtra.maxPersons} pers.</span>
+                  </div>
+                )}
+                <div className="p-3 rounded-lg bg-dark border border-white/5">
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 block">Tarif</span>
+                  <span className="text-sm text-white/70 mt-1 block">💰 Par {selectedExtra.priceUnit}</span>
+                </div>
+              </div>
+              <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+                <div>
+                  <span className="font-playfair text-2xl font-bold text-gold">
+                    {parseFloat(selectedExtra.price).toLocaleString()}
+                  </span>
+                  <span className="text-sm text-white/30 ml-1">MAD/{selectedExtra.priceUnit}</span>
+                </div>
+                {isExtraInCart(selectedExtra.id) ? (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-green-400">✓ Dans le panier</span>
+                    <button onClick={() => { removeExtra(selectedExtra.id); setSelectedExtra(null); }}
+                            className="px-4 py-2.5 rounded-lg border border-white/10 text-white/60 hover:border-red-400/40 hover:text-red-400 text-sm transition-colors">
+                      Retirer
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => {
+                    addExtra({ id: selectedExtra.id, name: selectedExtra.name, category: selectedExtra.category, price: parseFloat(selectedExtra.price), priceUnit: selectedExtra.priceUnit, quantity: 1 });
+                    setSelectedExtra(null);
+                  }}
+                          className="px-6 py-2.5 rounded-lg bg-gold hover:bg-gold-dark text-dark font-inter font-semibold text-sm transition-colors duration-300">
+                    + Ajouter au panier
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
