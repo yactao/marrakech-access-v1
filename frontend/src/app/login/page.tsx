@@ -29,6 +29,7 @@ export default function LoginPage() {
         const res = await api.post('/auth/login', { email, password });
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('user', JSON.stringify(res.data.user));
+        document.cookie = `logged_in=1; path=/; max-age=${7 * 24 * 3600}; samesite=strict`;
         window.dispatchEvent(new Event('user-changed'));
 
         // Redirection selon le rôle
@@ -50,6 +51,7 @@ export default function LoginPage() {
         });
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('user', JSON.stringify(res.data.user));
+        document.cookie = `logged_in=1; path=/; max-age=${7 * 24 * 3600}; samesite=strict`;
         window.dispatchEvent(new Event('user-changed'));
 
         if (res.data.user.role === 'OWNER') {

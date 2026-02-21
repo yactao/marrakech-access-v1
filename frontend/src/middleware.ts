@@ -10,10 +10,10 @@ export function middleware(request: NextRequest) {
   const isProtected = PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
   if (!isProtected) return NextResponse.next();
 
-  // Vérifier le cookie access_token posé par le backend (httpOnly)
-  const accessToken = request.cookies.get('access_token')?.value;
+  // Vérifier le cookie logged_in posé par le frontend après connexion
+  const loggedIn = request.cookies.get('logged_in')?.value;
 
-  if (!accessToken) {
+  if (!loggedIn) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);

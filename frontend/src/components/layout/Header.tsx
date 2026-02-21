@@ -70,6 +70,7 @@ export default function Header() {
     }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    document.cookie = 'logged_in=; path=/; max-age=0; samesite=strict';
     setUser(null);
     setMenuOpen(false);
     window.location.href = '/';
