@@ -54,7 +54,6 @@ export default function ExtrasPage() {
     : extras;
 
   const isInCart = (extraId: string) => cart.extras.some((e) => e.id === extraId);
-  const getCartQuantity = (extraId: string) => cart.extras.find((e) => e.id === extraId)?.quantity || 0;
 
   const handleAddToCart = (extra: Extra) => {
     const cartExtra: CartExtra = {
@@ -92,13 +91,22 @@ export default function ExtrasPage() {
           <p className="mt-3 text-white/40 max-w-lg mx-auto">
             Chef à domicile, quad dans le désert, vol en montgolfière... Votre séjour, vos envies.
           </p>
-          
-          {/* Indicateur panier */}
-          {cart.extras.length > 0 && (
-            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gold/10 border border-gold/20">
-              <span className="text-gold text-sm">🛒 {cart.extras.length} expérience{cart.extras.length > 1 ? 's' : ''} dans votre panier</span>
-            </div>
-          )}
+
+          <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
+            {cart.extras.length > 0 && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gold/10 border border-gold/20">
+                <span className="text-gold text-sm">🛒 {cart.extras.length} expérience{cart.extras.length > 1 ? 's' : ''} dans votre panier</span>
+              </div>
+            )}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('chat:open', {
+                detail: { message: 'Bonjour Al, pouvez-vous me recommander des expériences adaptées à mon séjour ?' }
+              }))}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-white/50 hover:border-gold/30 hover:text-gold text-sm transition-all duration-300"
+            >
+              🎩 Demander à Al
+            </button>
+          </div>
         </div>
 
         {/* Onglets catégories */}

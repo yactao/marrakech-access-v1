@@ -403,6 +403,15 @@ export default function PropertyDetailPage() {
                 className="w-full py-3 rounded border border-gold/30 text-gold hover:bg-gold/5 font-inter text-sm transition-all duration-300">
                 🎯 {showExtras ? 'Masquer les extras' : `Ajouter des extras ${cart.extras.length > 0 ? `(${cart.extras.length})` : ''}`}
               </button>
+
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('chat:open', {
+                  detail: { message: `Bonjour Al, je regarde "${property.name}". Pouvez-vous m'aider à organiser mon séjour ?` }
+                }))}
+                className="w-full py-2.5 rounded border border-white/10 text-white/50 hover:border-gold/30 hover:text-gold font-inter text-sm transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                🎩 Parler à Al
+              </button>
             </div>
           </div>
         </div>

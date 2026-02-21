@@ -109,7 +109,7 @@ export async function chat(
   message: string,
   conversationId: string | null,
   userId: string | null
-): Promise<{ reply: string; conversationId: string }> {
+): Promise<{ reply: string; conversationId: string; cards: any[] }> {
 
   // ──────────────────────────────────────────────────────
   // CAS A : Visiteur non connecté → conversation en mémoire
@@ -139,6 +139,7 @@ export async function chat(
       return {
         reply: 'Cette conversation a atteint sa limite. Connectez-vous pour continuer.',
         conversationId: anonId,
+        cards: [],
       };
     }
 
@@ -146,14 +147,14 @@ export async function chat(
     conversationMessages.push({ role: 'user', content: safeMessage });
 
     // Appel IA
-    const reply = await runAIWithTools(conversationMessages, null);
+    const { reply, cards } = await runAIWithTools(conversationMessages, null);
 
     // Sauvegarder en mémoire et mettre à jour le timestamp d'activité
     conversationMessages.push({ role: 'assistant', content: reply });
     anonymousConversations.set(anonId, conversationMessages);
     anonLastActivity.set(anonId, Date.now());
 
-    return { reply, conversationId: anonId };
+    return { reply, conversationId: anonId, cards };
   }
 
   // ──────────────────────────────────────────────────────
@@ -190,7 +191,7 @@ export async function chat(
   messages.push({ role: 'user', content: message });
 
   // Appel IA avec les tools
-  const reply = await runAIWithTools(messages, userId, user);
+  const { reply, cards } = await runAIWithTools(messages, userId, user);
 
   // Sauvegarder en base
   messages.push({ role: 'assistant', content: reply });
@@ -203,7 +204,7 @@ export async function chat(
     },
   });
 
-  return { reply, conversationId: conversation.id };
+  return { reply, conversationId: conversation.id, cards };
 }
 
 // ──────────────────────────────────────────────────────
@@ -214,10 +215,14 @@ async function runAIWithTools(
   messages: any[],
   userId: string | null,
   user?: any
-): Promise<string> {
+): Promise<{ reply: string; cards: any[] }> {
   const role = user?.role || null;
   const activeTools = getToolsForRole(role);
   const systemPrompt = buildSystemPrompt(user || null);
+
+  const cards: any[] = [];
+  const seenSlugs = new Set<string>();
+  const seenExtraIds = new Set<string>();
 
   let response = await client.chat.completions.create({
     model: env.AI_MODEL,
@@ -264,6 +269,30 @@ async function runAIWithTools(
       const result = await executeTool(toolCall.function.name, args, userId);
       console.log(`✅ Résultat:`, JSON.stringify(result).substring(0, 200));
 
+      // Collecter les cards selon le tool appelé
+      const toolName = toolCall.function.name;
+      if ((toolName === 'search_properties' || toolName === 'get_similar_properties') && result.properties?.length) {
+        for (const p of result.properties) {
+          if (!seenSlugs.has(p.slug)) {
+            seenSlugs.add(p.slug);
+            cards.push({ type: 'property', data: p });
+          }
+        }
+      } else if (toolName === 'get_upsell_suggestions' && result.extras?.length) {
+        for (const e of result.extras) {
+          if (!seenExtraIds.has(e.id)) {
+            seenExtraIds.add(e.id);
+            cards.push({ type: 'extra', data: e });
+          }
+        }
+      } else if (toolName === 'add_to_cart' && result.success) {
+        if (result.action === 'add_property_to_cart') {
+          cards.push({ type: 'cart_property', data: result });
+        } else if (result.action === 'add_extra_to_cart') {
+          cards.push({ type: 'cart_extra', data: result });
+        }
+      }
+
       messages.push({
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -286,8 +315,8 @@ async function runAIWithTools(
     assistantMessage = response.choices[0].message;
   }
 
-  return (
-    assistantMessage.content ||
-    "Je suis désolé, je n'ai pas pu traiter votre demande. Pouvez-vous reformuler ?"
-  );
+  return {
+    reply: assistantMessage.content || "Je suis désolé, je n'ai pas pu traiter votre demande. Pouvez-vous reformuler ?",
+    cards,
+  };
 }

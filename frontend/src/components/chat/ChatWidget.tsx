@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useCart, CartExtra } from '@/lib/CartContext';
+
+interface Message {
+  role: string;
+  content: string;
+  cards?: any[];
+}
 
 // Messages proactifs selon la page
 const proactiveMessages: Record<string, { delay: number; message: string }> = {
@@ -63,10 +71,187 @@ const greetings = [
   'Bienvenue ! ✨ Je suis Al, expert de Marrakech depuis toujours. Posez-moi n\'importe quelle question !',
 ];
 
+// ─── Card : bien immobilier ───────────────────────────────────────────────
+function PropertyCard({ data, onChoose }: { data: any; onChoose: (d: any) => void }) {
+  const { cart } = useCart();
+  const isChosen = cart.propertySlug === data.slug;
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-dark overflow-hidden">
+      {data.coverPhoto && (
+        <div className="h-28 overflow-hidden">
+          <img src={data.coverPhoto} alt={data.nom} className="w-full h-full object-cover" />
+        </div>
+      )}
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-white font-playfair">{data.nom}</p>
+            <p className="text-[11px] text-white/40 mt-0.5">
+              {data.type} · {data.quartier} · {data.chambres} ch.
+            </p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="text-gold font-bold text-sm">{data.priceLowSeason?.toLocaleString()}</p>
+            <p className="text-[10px] text-white/30">MAD/nuit</p>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-3">
+          <Link
+            href={data.lien || `/properties/${data.slug}`}
+            className="flex-1 py-1.5 rounded-lg border border-white/10 text-white/50 hover:text-white text-[11px] text-center transition-colors"
+          >
+            Voir la fiche
+          </Link>
+          <button
+            onClick={() => onChoose(data)}
+            disabled={isChosen}
+            className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+              isChosen
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
+                : 'bg-gold hover:bg-gold-dark text-dark'
+            }`}
+          >
+            {isChosen ? '✓ Choisi' : 'Choisir →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Card : expérience / extra ────────────────────────────────────────────
+function ExtraCard({ data, onAdd }: { data: any; onAdd: (d: any) => void }) {
+  const { cart } = useCart();
+  const isInCart = cart.extras.some((e) => e.id === data.id);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-dark overflow-hidden">
+      <div className="flex gap-3 p-3">
+        {data.photo && (
+          <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+            <img src={data.photo} alt={data.nom} className="w-full h-full object-cover" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white font-playfair truncate">{data.nom}</p>
+          <p className="text-[11px] text-white/40 mt-0.5 line-clamp-2">{data.description}</p>
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-gold text-sm font-bold">{data.prix}</span>
+            <button
+              onClick={() => onAdd(data)}
+              disabled={isInCart}
+              className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                isInCart
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
+                  : 'bg-gold hover:bg-gold-dark text-dark'
+              }`}
+            >
+              {isInCart ? '✓ Ajouté' : '+ Ajouter'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Card : bien ajouté au panier par l'IA (add_to_cart tool) ─────────────
+function CartPropertyCard({ data, setProperty, setDates, setGuests }: {
+  data: any;
+  setProperty: (p: any) => void;
+  setDates: (ci: string, co: string) => void;
+  setGuests: (g: number) => void;
+}) {
+  const [applied, setApplied] = useState(false);
+
+  const apply = () => {
+    setProperty(data.property);
+    if (data.dates) setDates(data.dates.checkIn, data.dates.checkOut);
+    if (data.guests) setGuests(data.guests);
+    setApplied(true);
+  };
+
+  return (
+    <div className="rounded-xl border border-gold/30 bg-gold/5 p-3">
+      <p className="text-xs font-semibold text-gold mb-1">🏠 {data.property?.name}</p>
+      {data.dates && (
+        <p className="text-[11px] text-white/50 mb-2">
+          {data.dates.checkIn} → {data.dates.checkOut} · {data.dates.nights} nuits · {data.guests} voy.
+        </p>
+      )}
+      {data.estimatedTotal && (
+        <p className="text-[11px] text-white/40 mb-2">Estimation : {data.estimatedTotal}</p>
+      )}
+      <div className="flex gap-2">
+        <Link
+          href={`/properties/${data.property?.slug}`}
+          className="flex-1 py-1.5 rounded-lg border border-white/10 text-white/50 hover:text-white text-[11px] text-center"
+        >
+          Voir la fiche
+        </Link>
+        <button
+          onClick={apply}
+          disabled={applied}
+          className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+            applied
+              ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
+              : 'bg-gold hover:bg-gold-dark text-dark'
+          }`}
+        >
+          {applied ? '✓ Dans le panier' : 'Ajouter au panier'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Card : extra ajouté au panier par l'IA ───────────────────────────────
+function CartExtraCard({ data, addExtra }: { data: any; addExtra: (e: CartExtra) => void }) {
+  const { cart } = useCart();
+  const isInCart = cart.extras.some((e) => e.id === data.extra?.id);
+
+  const apply = () => {
+    if (!data.extra) return;
+    addExtra({
+      id: data.extra.id,
+      name: data.extra.name,
+      category: data.extra.category,
+      price: data.extra.price,
+      priceUnit: data.extra.priceUnit,
+      quantity: data.extra.quantity || 1,
+    });
+  };
+
+  return (
+    <div className="rounded-xl border border-gold/30 bg-gold/5 p-3">
+      <p className="text-xs font-semibold text-gold mb-1">✨ {data.extra?.name}</p>
+      <p className="text-[11px] text-white/40 mb-2">
+        {data.extra?.price?.toLocaleString()} MAD/{data.extra?.priceUnit}
+        {data.extra?.quantity > 1 && ` × ${data.extra.quantity}`}
+      </p>
+      <button
+        onClick={apply}
+        disabled={isInCart}
+        className={`w-full py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+          isInCart
+            ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
+            : 'bg-gold hover:bg-gold-dark text-dark'
+        }`}
+      >
+        {isInCart ? '✓ Dans le panier' : '+ Ajouter au panier'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Widget principal ─────────────────────────────────────────────────────
 export default function ChatWidget() {
   const pathname = usePathname();
+  const { cart, setProperty, setDates, setGuests, addExtra } = useCart();
+
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -77,6 +262,8 @@ export default function ChatWidget() {
   const [pulseButton, setPulseButton] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isOpenRef = useRef(isOpen);
+  useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
 
   // Scroll auto
   useEffect(() => {
@@ -91,17 +278,14 @@ export default function ChatWidget() {
   // Message proactif selon la page
   useEffect(() => {
     if (hasInteracted || isOpen) return;
-
     const pageKey = Object.keys(proactiveMessages).find((key) => pathname.startsWith(key));
     if (!pageKey) return;
-
     const { delay, message } = proactiveMessages[pageKey];
     const timer = setTimeout(() => {
       setProactiveBubble(message);
       setShowProactive(true);
       setTimeout(() => setShowProactive(false), 8000);
     }, delay);
-
     return () => clearTimeout(timer);
   }, [pathname, hasInteracted, isOpen]);
 
@@ -111,12 +295,29 @@ export default function ChatWidget() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Écouter l'event chat:open (déclenché depuis les pages bien/extras)
+  useEffect(() => {
+    const handleChatOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ message?: string }>).detail;
+      if (!isOpenRef.current) {
+        handleOpen();
+      }
+      if (detail?.message) {
+        setTimeout(() => {
+          setInput(detail.message!);
+          inputRef.current?.focus();
+        }, 400);
+      }
+    };
+    window.addEventListener('chat:open', handleChatOpen);
+    return () => window.removeEventListener('chat:open', handleChatOpen);
+  }, []);
+
   const handleOpen = () => {
     setIsOpen(true);
     setShowProactive(false);
     setHasInteracted(true);
     setPulseButton(false);
-
     if (messages.length === 0) {
       setIsTypingGreeting(true);
       setTimeout(() => {
@@ -144,7 +345,11 @@ export default function ChatWidget() {
 
     try {
       const { data } = await api.post('/chat', { message: messageText, conversationId });
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: data.reply,
+        cards: data.cards || [],
+      }]);
       if (data.conversationId) setConversationId(data.conversationId);
     } catch {
       setMessages((prev) => [...prev, {
@@ -154,6 +359,65 @@ export default function ChatWidget() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleChooseProperty = (data: any) => {
+    setProperty({
+      id: data.id,
+      name: data.nom,
+      slug: data.slug,
+      district: data.quartier,
+      type: data.type,
+      priceLowSeason: data.priceLowSeason,
+      currency: data.currency || 'MAD',
+      cleaningFee: data.cleaningFee || 0,
+      capacity: data.capacite,
+      minNights: data.nuits_minimum || 1,
+    });
+    sendMessage(`J'ai choisi "${data.nom}". Pouvez-vous vérifier les disponibilités ?`);
+  };
+
+  const handleAddExtra = (data: any) => {
+    addExtra({
+      id: data.id,
+      name: data.nom,
+      category: data.categorie,
+      price: data.price,
+      priceUnit: data.priceUnit,
+      quantity: 1,
+    });
+    sendMessage(`Parfait, j'ai ajouté "${data.nom}" à mon panier.`);
+  };
+
+  const renderCards = (cards: any[]) => {
+    if (!cards || cards.length === 0) return null;
+    return (
+      <div className="mt-3 space-y-2">
+        {cards.map((card, i) => {
+          if (card.type === 'property') {
+            return <PropertyCard key={i} data={card.data} onChoose={handleChooseProperty} />;
+          }
+          if (card.type === 'extra') {
+            return <ExtraCard key={i} data={card.data} onAdd={handleAddExtra} />;
+          }
+          if (card.type === 'cart_property') {
+            return (
+              <CartPropertyCard
+                key={i}
+                data={card.data}
+                setProperty={setProperty}
+                setDates={setDates}
+                setGuests={setGuests}
+              />
+            );
+          }
+          if (card.type === 'cart_extra') {
+            return <CartExtraCard key={i} data={card.data} addExtra={addExtra} />;
+          }
+          return null;
+        })}
+      </div>
+    );
   };
 
   const renderMessage = (content: string) => {
@@ -194,7 +458,6 @@ export default function ChatWidget() {
       )}
 
       {/* BOUTON FLOTTANT */}
- {/* BOUTON FLOTTANT */}
       <div className="fixed bottom-6 right-6 z-[70]">
 
         {/* Ondes pulsantes (seulement si pas ouvert et pas encore interagi) */}
@@ -244,11 +507,9 @@ export default function ChatWidget() {
             <span className="text-white/60 text-xl">✕</span>
           ) : (
             <div className="relative">
-              {/* Avatar avec le fez */}
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center animate-float shadow-lg">
                 <span className="text-2xl">🎩</span>
               </div>
-              {/* Badge notification */}
               {!hasInteracted && (
                 <span className="absolute -top-1 -right-1 flex items-center justify-center">
                   <span className="absolute w-3 h-3 rounded-full bg-gold animate-ping" />
@@ -259,13 +520,16 @@ export default function ChatWidget() {
           )}
         </button>
       </div>
+
       {/* FENÊTRE DE CHAT */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-[70] w-[380px] h-[550px] rounded-2xl overflow-hidden border border-white/10 bg-dark shadow-2xl flex flex-col"
-             style={{ animation: 'slideUp 0.3s ease-out' }}>
+        <div
+          className="fixed bottom-24 right-6 z-[70] w-[380px] max-h-[600px] rounded-2xl overflow-hidden border border-white/10 bg-dark shadow-2xl flex flex-col"
+          style={{ animation: 'slideUp 0.3s ease-out' }}
+        >
 
           {/* Header */}
-          <div className="px-5 py-4 bg-gradient-to-r from-dark-light to-dark border-b border-gold/10 flex items-center gap-3">
+          <div className="px-5 py-4 bg-gradient-to-r from-dark-light to-dark border-b border-gold/10 flex items-center gap-3 flex-shrink-0">
             <div className="relative">
               <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center shadow-lg border-2 border-gold/30">
                 <span className="text-xl">🎩</span>
@@ -279,6 +543,14 @@ export default function ChatWidget() {
                 Votre majordome • En ligne
               </p>
             </div>
+            {cart.propertyId && (
+              <Link
+                href="/checkout"
+                className="text-[10px] bg-gold/10 border border-gold/20 text-gold px-2 py-1 rounded-full hover:bg-gold/20 transition-colors"
+              >
+                🛒 Panier
+              </Link>
+            )}
             <span className="text-[9px] text-white/20 font-inter bg-white/5 px-2 py-1 rounded-full">IA</span>
           </div>
 
@@ -303,18 +575,21 @@ export default function ChatWidget() {
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'items-end gap-2'}`}>
                 {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center flex-shrink-0 shadow-md">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C41E3A] to-[#8B0000] flex items-center justify-center flex-shrink-0 shadow-md self-start mt-1">
                     <span className="text-sm">🎩</span>
                   </div>
                 )}
-                <div
-                  className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-gold/15 text-white/90 rounded-2xl rounded-br-sm border border-gold/10'
-                      : 'bg-dark-lighter text-white/70 rounded-2xl rounded-bl-sm'
-                  }`}
-                  dangerouslySetInnerHTML={{ __html: renderMessage(msg.content) }}
-                />
+                <div className={`${msg.role === 'user' ? 'max-w-[80%]' : 'flex-1 min-w-0'}`}>
+                  <div
+                    className={`px-4 py-3 text-sm leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-gold/15 text-white/90 rounded-2xl rounded-br-sm border border-gold/10'
+                        : 'bg-dark-lighter text-white/70 rounded-2xl rounded-bl-sm'
+                    }`}
+                    dangerouslySetInnerHTML={{ __html: renderMessage(msg.content) }}
+                  />
+                  {msg.role === 'assistant' && msg.cards && renderCards(msg.cards)}
+                </div>
               </div>
             ))}
 
@@ -338,7 +613,7 @@ export default function ChatWidget() {
 
           {/* Suggestions */}
           {messages.length <= 1 && !loading && !isTypingGreeting && (
-            <div className="px-4 pb-2">
+            <div className="px-4 pb-2 flex-shrink-0">
               <p className="text-[10px] text-white/20 mb-2 font-inter">Suggestions :</p>
               <div className="flex flex-wrap gap-1.5">
                 {getSuggestions().map((s, i) => (
@@ -355,7 +630,7 @@ export default function ChatWidget() {
           )}
 
           {/* Input */}
-          <div className="px-4 py-3 border-t border-white/5 bg-dark-light">
+          <div className="px-4 py-3 border-t border-white/5 bg-dark-light flex-shrink-0">
             <div className="flex items-center gap-2">
               <input
                 ref={inputRef}
@@ -381,7 +656,7 @@ export default function ChatWidget() {
       )}
 
       <style jsx>{`
-      @keyframes slideUp {
+        @keyframes slideUp {
           from { opacity: 0; transform: translateY(20px) scale(0.95); }
           to { opacity: 1; transform: translateY(0) scale(1); }
         }

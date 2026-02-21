@@ -38,6 +38,7 @@ router.post('/', chatLimiter, async (req: Request, res: Response): Promise<void>
     res.json({
       reply: result.reply,
       conversationId: result.conversationId,
+      cards: result.cards || [],
     });
   } catch (error: any) {
     console.error('❌ Erreur chat:', error.message);
