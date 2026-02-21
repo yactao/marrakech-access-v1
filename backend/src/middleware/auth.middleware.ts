@@ -11,16 +11,20 @@ export interface AuthRequest extends Request {
   };
 }
 
-// Middleware : vérifie le token JWT
+// Middleware : vérifie le token JWT (cookie httpOnly en priorité, sinon Authorization header)
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
-  const header = req.headers.authorization;
+  // 1. Lire depuis le cookie httpOnly (priorité)
+  // 2. Fallback sur le header Authorization: Bearer <token>
+  const token =
+    req.cookies?.access_token ||
+    (req.headers.authorization?.startsWith('Bearer ')
+      ? req.headers.authorization.split(' ')[1]
+      : null);
 
-  if (!header || !header.startsWith('Bearer ')) {
+  if (!token) {
     res.status(401).json({ error: 'Token manquant. Connectez-vous.' });
     return;
   }
-
-  const token = header.split(' ')[1];
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as {
@@ -30,9 +34,8 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
     };
     req.user = decoded;
     next();
-  } catch (error) {
+  } catch {
     res.status(401).json({ error: 'Token invalide ou expiré.' });
-    return;
   }
 }
 

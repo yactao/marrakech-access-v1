@@ -51,20 +51,24 @@ ${user ? `Prénom: ${user.firstName}, Rôle: ${user.role}` : 'Visiteur non conne
 Date du jour: ${new Date().toLocaleDateString('fr-FR')}`;
 }
 
-// ✅ FIX #2 — Type pour les conversations anonymes (stockées en mémoire, pas en DB)
-// Clé : conversationId (UUID côté client), Valeur : tableau de messages
-// Les visiteurs non connectés n'ont plus d'entrées fantômes dans la table users/conversations.
-const anonymousConversations = new Map<string, any[]>();
+// Conversations anonymes en mémoire (pas en DB)
+// Limite : MAX_ANON_CONVERSATIONS conversations simultanées max
+const MAX_ANON_CONVERSATIONS = 500;
+const MAX_ANON_MESSAGES = 20;       // max échanges par conversation anonyme
+const MAX_ANON_MESSAGE_LENGTH = 800; // max caractères par message anonyme
 
-// Nettoyage automatique des conversations anonymes de plus de 2h
-// pour éviter une fuite mémoire sur le serveur Railway
+const anonymousConversations = new Map<string, any[]>();
+// Timestamp de DERNIÈRE ACTIVITÉ par conversation (pour nettoyage correct)
+const anonLastActivity = new Map<string, number>();
+
+// Nettoyage automatique des conversations inactives depuis plus de 2h
 setInterval(() => {
   const TWO_HOURS = 2 * 60 * 60 * 1000;
   const cutoff = Date.now() - TWO_HOURS;
-  for (const [id, msgs] of anonymousConversations.entries()) {
-    // On stocke le timestamp dans le premier message
-    if (msgs[0]?._timestamp && msgs[0]._timestamp < cutoff) {
+  for (const [id, lastActivity] of anonLastActivity.entries()) {
+    if (lastActivity < cutoff) {
       anonymousConversations.delete(id);
+      anonLastActivity.delete(id);
     }
   }
 }, 30 * 60 * 1000); // toutes les 30 minutes
@@ -80,30 +84,42 @@ export async function chat(
   // Aucune écriture en base, pas de user fantôme.
   // ──────────────────────────────────────────────────────
   if (!userId) {
+    // Tronquer le message si trop long
+    const safeMessage = message.slice(0, MAX_ANON_MESSAGE_LENGTH);
+
     // Générer un ID de conversation anonyme si premier message
     const anonId = conversationId || `anon-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    // Charger ou initialiser l'historique en mémoire
-    let anonMessages = anonymousConversations.get(anonId) || [];
+    // Si la Map est pleine, supprimer la conversation la plus ancienne
+    if (!anonymousConversations.has(anonId) && anonymousConversations.size >= MAX_ANON_CONVERSATIONS) {
+      const oldestId = anonLastActivity.keys().next().value;
+      if (oldestId) {
+        anonymousConversations.delete(oldestId);
+        anonLastActivity.delete(oldestId);
+      }
+    }
 
-    // Marquer le timestamp de création pour le nettoyage
-    if (anonMessages.length === 0) {
-      anonMessages.push({ _timestamp: Date.now() });
+    // Charger ou initialiser l'historique en mémoire
+    const conversationMessages = anonymousConversations.get(anonId) || [];
+
+    // Bloquer si la conversation a atteint la limite de messages
+    if (conversationMessages.length >= MAX_ANON_MESSAGES * 2) {
+      return {
+        reply: 'Cette conversation a atteint sa limite. Connectez-vous pour continuer.',
+        conversationId: anonId,
+      };
     }
 
     // Ajouter le message utilisateur
-    const conversationMessages = anonMessages.filter((m) => m.role); // exclure le timestamp interne
-    conversationMessages.push({ role: 'user', content: message });
+    conversationMessages.push({ role: 'user', content: safeMessage });
 
     // Appel IA
     const reply = await runAIWithTools(conversationMessages, null);
 
-    // Sauvegarder en mémoire (avec le timestamp interne)
+    // Sauvegarder en mémoire et mettre à jour le timestamp d'activité
     conversationMessages.push({ role: 'assistant', content: reply });
-    anonymousConversations.set(anonId, [
-      { _timestamp: anonMessages[0]._timestamp },
-      ...conversationMessages,
-    ]);
+    anonymousConversations.set(anonId, conversationMessages);
+    anonLastActivity.set(anonId, Date.now());
 
     return { reply, conversationId: anonId };
   }

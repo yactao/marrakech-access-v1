@@ -22,31 +22,71 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Mot de passe requis'),
 });
 
-// Génère un token JWT
-function generateToken(user: { id: string; email: string; role: string }): string {
-  const payload = { id: user.id, email: user.email, role: user.role };
-  const secret = env.JWT_SECRET;
-  const options: jwt.SignOptions = { expiresIn: env.JWT_EXPIRES_IN as any };
-  return jwt.sign(payload, secret, options);
+// Options communes pour les cookies sécurisés
+function getCookieOptions(maxAgeMs: number) {
+  return {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: (env.NODE_ENV === 'production' ? 'strict' : 'lax') as 'strict' | 'lax',
+    maxAge: maxAgeMs,
+  };
+}
+
+// Convertit une durée string ('7d', '15m', '30d') en millisecondes
+function parseDurationMs(duration: string): number {
+  const match = duration.match(/^(\d+)([smhd])$/);
+  if (!match) return 7 * 24 * 60 * 60 * 1000; // défaut 7j
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  const multipliers: Record<string, number> = {
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+  };
+  return value * multipliers[unit];
+}
+
+// Génère un access token JWT
+function generateAccessToken(user: { id: string; email: string; role: string }): string {
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_EXPIRES_IN as any }
+  );
+}
+
+// Génère un refresh token JWT
+function generateRefreshToken(userId: string): string {
+  return jwt.sign(
+    { id: userId },
+    env.REFRESH_TOKEN_SECRET,
+    { expiresIn: env.REFRESH_TOKEN_EXPIRES_IN as any }
+  );
+}
+
+// Pose les deux cookies httpOnly sur la réponse
+function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
+  res.cookie('access_token', accessToken, getCookieOptions(parseDurationMs(env.JWT_EXPIRES_IN)));
+  res.cookie('refresh_token', refreshToken, {
+    ...getCookieOptions(parseDurationMs(env.REFRESH_TOKEN_EXPIRES_IN)),
+    path: '/api/auth/refresh', // uniquement envoyé sur l'endpoint de refresh
+  });
 }
 
 // POST /api/auth/register
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    // 1. Valider les données
     const data = registerSchema.parse(req.body);
 
-    // 2. Vérifier si l'email existe déjà
     const existing = await prisma.user.findUnique({ where: { email: data.email } });
     if (existing) {
       res.status(409).json({ error: 'Cet email est déjà utilisé.' });
       return;
     }
 
-    // 3. Hasher le mot de passe
     const passwordHash = await bcrypt.hash(data.password, 12);
 
-    // 4. Créer l'utilisateur
     const user = await prisma.user.create({
       data: {
         email: data.email,
@@ -58,13 +98,14 @@ export async function register(req: Request, res: Response): Promise<void> {
       },
     });
 
-    // 5. Générer le token
-    const token = generateToken({ id: user.id, email: user.email, role: user.role });
+    const accessToken = generateAccessToken({ id: user.id, email: user.email, role: user.role });
+    const refreshToken = generateRefreshToken(user.id);
 
-    // 6. Répondre
+    setAuthCookies(res, accessToken, refreshToken);
+
     res.status(201).json({
       message: 'Compte créé avec succès',
-      token,
+      token: accessToken, // conservé pour rétrocompatibilité
       user: {
         id: user.id,
         email: user.email,
@@ -86,30 +127,28 @@ export async function register(req: Request, res: Response): Promise<void> {
 // POST /api/auth/login
 export async function login(req: Request, res: Response): Promise<void> {
   try {
-    // 1. Valider
     const data = loginSchema.parse(req.body);
 
-    // 2. Chercher l'utilisateur
     const user = await prisma.user.findUnique({ where: { email: data.email } });
     if (!user) {
       res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
       return;
     }
 
-    // 3. Vérifier le mot de passe
     const validPassword = await bcrypt.compare(data.password, user.passwordHash);
     if (!validPassword) {
       res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
       return;
     }
 
-    // 4. Générer le token
-    const token = generateToken({ id: user.id, email: user.email, role: user.role });
+    const accessToken = generateAccessToken({ id: user.id, email: user.email, role: user.role });
+    const refreshToken = generateRefreshToken(user.id);
 
-    // 5. Répondre
+    setAuthCookies(res, accessToken, refreshToken);
+
     res.json({
       message: 'Connexion réussie',
-      token,
+      token: accessToken, // conservé pour rétrocompatibilité
       user: {
         id: user.id,
         email: user.email,
@@ -126,6 +165,46 @@ export async function login(req: Request, res: Response): Promise<void> {
     console.error('Erreur login:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
+}
+
+// POST /api/auth/refresh
+export async function refresh(req: Request, res: Response): Promise<void> {
+  const token = req.cookies?.refresh_token;
+
+  if (!token) {
+    res.status(401).json({ error: 'Refresh token manquant.' });
+    return;
+  }
+
+  try {
+    const decoded = jwt.verify(token, env.REFRESH_TOKEN_SECRET) as { id: string };
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, email: true, role: true },
+    });
+
+    if (!user) {
+      res.status(401).json({ error: 'Utilisateur introuvable.' });
+      return;
+    }
+
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user.id);
+
+    setAuthCookies(res, newAccessToken, newRefreshToken);
+
+    res.json({ token: newAccessToken });
+  } catch {
+    res.status(401).json({ error: 'Refresh token invalide ou expiré.' });
+  }
+}
+
+// POST /api/auth/logout
+export async function logout(_req: Request, res: Response): Promise<void> {
+  res.clearCookie('access_token');
+  res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+  res.json({ message: 'Déconnexion réussie.' });
 }
 
 // GET /api/auth/me (route protégée)
