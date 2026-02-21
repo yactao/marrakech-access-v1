@@ -21,13 +21,21 @@ export default function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
+  const loadUser = () => {
     const userData = localStorage.getItem('user');
     if (userData) {
       try {
         setUser(JSON.parse(userData));
       } catch {}
+    } else {
+      setUser(null);
     }
+  };
+
+  useEffect(() => {
+    loadUser();
+    window.addEventListener('user-changed', loadUser);
+    return () => window.removeEventListener('user-changed', loadUser);
   }, []);
 
   // Ferme le dropdown si clic en dehors

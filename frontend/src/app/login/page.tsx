@@ -29,6 +29,7 @@ export default function LoginPage() {
         const res = await api.post('/auth/login', { email, password });
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('user', JSON.stringify(res.data.user));
+        window.dispatchEvent(new Event('user-changed'));
 
         // Redirection selon le rôle
         if (res.data.user.role === 'ADMIN') {
@@ -49,6 +50,7 @@ export default function LoginPage() {
         });
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('user', JSON.stringify(res.data.user));
+        window.dispatchEvent(new Event('user-changed'));
 
         if (res.data.user.role === 'OWNER') {
           router.push('/dashboard');
