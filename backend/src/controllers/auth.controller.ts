@@ -23,11 +23,14 @@ const loginSchema = z.object({
 });
 
 // Options communes pour les cookies sécurisés
+// En production (cross-site frontend/backend) : SameSite=None + Secure requis par les navigateurs
+// En dev (même origine localhost) : SameSite=Lax suffit et évite l'obligation HTTPS
 function getCookieOptions(maxAgeMs: number) {
+  const isProd = env.NODE_ENV === 'production';
   return {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: (env.NODE_ENV === 'production' ? 'strict' : 'lax') as 'strict' | 'lax',
+    secure: isProd,
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
     maxAge: maxAgeMs,
   };
 }
@@ -202,8 +205,10 @@ export async function refresh(req: Request, res: Response): Promise<void> {
 
 // POST /api/auth/logout
 export async function logout(_req: Request, res: Response): Promise<void> {
-  res.clearCookie('access_token');
-  res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+  const isProd = env.NODE_ENV === 'production';
+  const clearOpts = { httpOnly: true, secure: isProd, sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax' };
+  res.clearCookie('access_token', clearOpts);
+  res.clearCookie('refresh_token', { ...clearOpts, path: '/api/auth/refresh' });
   res.json({ message: 'Déconnexion réussie.' });
 }
 
