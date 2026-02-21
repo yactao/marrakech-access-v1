@@ -14,6 +14,9 @@ import { env } from './config/env';
 
 const app = express();
 
+// Railway (et tout reverse proxy) ajoute X-Forwarded-For — nécessaire pour le rate limiting
+app.set('trust proxy', 1);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
