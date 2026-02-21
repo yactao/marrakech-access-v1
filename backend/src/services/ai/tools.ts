@@ -257,29 +257,127 @@ export const tools: ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          context: { 
-            type: 'string', 
-            description: 'Contexte ou type de séjour : romantique, famille, groupe_amis, affaires, luxe, budget, aventure, detente' 
+          context: {
+            type: 'string',
+            description: 'Contexte ou type de séjour : romantique, famille, groupe_amis, affaires, luxe, budget, aventure, detente'
           },
-          budget_per_night: { 
-            type: 'number', 
-            description: 'Budget maximum par nuit en MAD' 
+          budget_per_night: {
+            type: 'number',
+            description: 'Budget maximum par nuit en MAD'
           },
-          guests: { 
-            type: 'number', 
-            description: 'Nombre de voyageurs' 
+          guests: {
+            type: 'number',
+            description: 'Nombre de voyageurs'
           },
-          interests: { 
-            type: 'array', 
+          interests: {
+            type: 'array',
             items: { type: 'string' },
-            description: 'Centres d\'intérêt : culture, gastronomie, sport, bien-etre, shopping, nature, fete' 
+            description: 'Centres d\'intérêt : culture, gastronomie, sport, bien-etre, shopping, nature, fete'
           },
         },
         required: ['context'],
       },
     },
   },
+  // =============================================
+  // TOOLS VENTES — suggestions et alternatives
+  // =============================================
+  {
+    type: 'function',
+    function: {
+      name: 'get_similar_properties',
+      description: 'Cherche des biens similaires disponibles quand un bien est indisponible, trop cher ou ne correspond plus. Utilise cet outil pour ne jamais laisser un client sans alternative.',
+      parameters: {
+        type: 'object',
+        properties: {
+          excluded_slug: { type: 'string', description: 'Slug du bien à exclure des résultats' },
+          capacity: { type: 'number', description: 'Nombre minimum de voyageurs requis' },
+          type: { type: 'string', enum: ['VILLA', 'RIAD', 'APPARTEMENT', 'DAR', 'SUITE'], description: 'Type de bien préféré (optionnel)' },
+          district: { type: 'string', description: 'Quartier préféré (optionnel)' },
+          max_budget: { type: 'number', description: 'Budget maximum par nuit en MAD (optionnel)' },
+          check_in: { type: 'string', description: 'Date arrivée YYYY-MM-DD pour vérifier la dispo (optionnel)' },
+          check_out: { type: 'string', description: 'Date départ YYYY-MM-DD pour vérifier la dispo (optionnel)' },
+        },
+        required: ['excluded_slug', 'capacity'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_upsell_suggestions',
+      description: 'Suggère des extras pertinents et complémentaires après qu\'un client a choisi ou consulté un bien. Utilise cet outil pour enrichir le séjour et augmenter la valeur de la réservation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          property_slug: { type: 'string', description: 'Slug du bien sélectionné' },
+          context: { type: 'string', description: 'Type de séjour : romantique, famille, groupe_amis, affaires, luxe, aventure, detente' },
+          guests: { type: 'number', description: 'Nombre de voyageurs' },
+        },
+        required: ['property_slug'],
+      },
+    },
+  },
+  // =============================================
+  // TOOLS ADMIN — gestion et statistiques
+  // =============================================
+  {
+    type: 'function',
+    function: {
+      name: 'get_admin_dashboard',
+      description: 'Affiche les statistiques temps réel de la plateforme : réservations du jour, CA du mois, tickets urgents, arrivées/départs. Utilise cet outil quand l\'admin demande un résumé de l\'activité.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_pending_items',
+      description: 'Liste les éléments en attente d\'action : réservations PENDING à confirmer, tickets OPEN/IN_PROGRESS à traiter. Utilise cet outil pour aider l\'admin à prioriser ses tâches.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['bookings', 'tickets', 'all'], description: 'Type d\'éléments à lister (défaut: all)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_booking_status',
+      description: 'Confirme ou annule une réservation. Demande TOUJOURS confirmation à l\'admin avant d\'exécuter. Utilise cet outil uniquement quand l\'admin confirme explicitement vouloir changer le statut.',
+      parameters: {
+        type: 'object',
+        properties: {
+          booking_id: { type: 'string', description: 'ID de la réservation' },
+          status: { type: 'string', enum: ['CONFIRMED', 'CANCELLED'], description: 'Nouveau statut' },
+          reason: { type: 'string', description: 'Raison du changement (optionnel)' },
+        },
+        required: ['booking_id', 'status'],
+      },
+    },
+  },
 ];
+
+// =============================================
+// FILTRAGE DES TOOLS PAR RÔLE
+// =============================================
+
+// Noms des tools réservés à l'admin
+const ADMIN_TOOL_NAMES = new Set(['get_admin_dashboard', 'get_pending_items', 'update_booking_status']);
+// Noms des tools réservés aux guests/ventes (pas utiles pour l'admin)
+const GUEST_TOOL_NAMES = new Set(['get_upsell_suggestions', 'get_similar_properties', 'create_booking', 'create_ticket', 'get_booking_status', 'add_to_cart', 'get_recommendations']);
+
+export function getToolsForRole(role: string | null): ChatCompletionTool[] {
+  const getName = (t: ChatCompletionTool): string =>
+    t.type === 'function' ? (t as { type: 'function'; function: { name: string } }).function.name : '';
+
+  if (role === 'ADMIN') {
+    return tools.filter(t => !GUEST_TOOL_NAMES.has(getName(t)));
+  }
+  return tools.filter(t => !ADMIN_TOOL_NAMES.has(getName(t)));
+}
 
 // =============================================
 // EXÉCUTION DES TOOLS
@@ -303,18 +401,28 @@ export async function executeTool(name: string, args: any, userId?: string | nul
       return createTicket(args, userId);
     case 'get_booking_status':
       return getBookingStatus(userId);
-    // Nouveaux tools Knowledge Base
     case 'get_weather':
       return getWeather(args);
     case 'get_events':
       return getEvents(args);
     case 'get_city_tips':
       return getCityTips(args);
-    // Nouveaux tools Panier & Recommandations
     case 'add_to_cart':
       return addToCart(args);
     case 'get_recommendations':
       return getRecommendations(args);
+    // Tools ventes
+    case 'get_similar_properties':
+      return getSimilarProperties(args);
+    case 'get_upsell_suggestions':
+      return getUpsellSuggestions(args);
+    // Tools admin
+    case 'get_admin_dashboard':
+      return getAdminDashboard();
+    case 'get_pending_items':
+      return getPendingItems(args);
+    case 'update_booking_status':
+      return updateBookingStatus(args);
     default:
       return { error: `Outil inconnu : ${name}` };
   }
@@ -1649,10 +1757,304 @@ async function getRecommendations(args: {
   return {
     contexte: args.context,
     message: `Voici mes recommandations pour un séjour ${args.context} à Marrakech :`,
-    hebergements: recommendations.properties.length > 0 
-      ? recommendations.properties 
+    hebergements: recommendations.properties.length > 0
+      ? recommendations.properties
       : 'Aucun hébergement ne correspond exactement à vos critères, mais je peux élargir la recherche.',
     experiences: recommendations.extras,
     conseils_personnalises: recommendations.tips,
+  };
+}
+
+// =============================================
+// TOOLS VENTES
+// =============================================
+
+// --- GET SIMILAR PROPERTIES ---
+async function getSimilarProperties(args: {
+  excluded_slug: string;
+  capacity: number;
+  type?: string;
+  district?: string;
+  max_budget?: number;
+  check_in?: string;
+  check_out?: string;
+}) {
+  const baseWhere: any = {
+    status: 'ACTIVE',
+    slug: { not: args.excluded_slug },
+    capacity: { gte: args.capacity },
+  };
+  if (args.type) baseWhere.type = args.type;
+  if (args.max_budget) baseWhere.priceLowSeason = { lte: args.max_budget };
+
+  // Essaie d'abord dans le même quartier, puis sans filtre quartier
+  const whereVariants = args.district
+    ? [{ ...baseWhere, district: args.district }, baseWhere]
+    : [baseWhere];
+
+  let properties: any[] = [];
+  for (const where of whereVariants) {
+    properties = await prisma.property.findMany({
+      where,
+      select: {
+        name: true, slug: true, type: true, district: true,
+        bedrooms: true, capacity: true, priceLowSeason: true,
+        priceHighSeason: true, cleaningFee: true, shortDesc: true, minNights: true,
+      },
+      orderBy: { priceLowSeason: 'asc' },
+      take: 5,
+    });
+    if (properties.length > 0) break;
+  }
+
+  // Si dates fournies, filtre sur la disponibilité réelle
+  if (args.check_in && args.check_out && properties.length > 0) {
+    const checkIn = new Date(args.check_in);
+    const checkOut = new Date(args.check_out);
+    const available: typeof properties = [];
+    for (const prop of properties) {
+      const overlap = await prisma.booking.findFirst({
+        where: {
+          property: { slug: prop.slug },
+          status: { in: ['CONFIRMED', 'CHECKED_IN', 'PENDING'] },
+          OR: [{ checkIn: { lt: checkOut }, checkOut: { gt: checkIn } }],
+        },
+      });
+      if (!overlap) available.push(prop);
+    }
+    properties = available;
+  }
+
+  if (properties.length === 0) {
+    return { message: 'Aucune alternative disponible pour ces critères.', properties: [] };
+  }
+
+  return {
+    count: properties.length,
+    message: 'Voici des alternatives disponibles :',
+    properties: properties.slice(0, 3).map(p => ({
+      nom: p.name, slug: p.slug, type: p.type, quartier: p.district,
+      chambres: p.bedrooms, capacite: p.capacity,
+      prix_basse_saison: `${p.priceLowSeason} MAD/nuit`,
+      prix_haute_saison: `${p.priceHighSeason} MAD/nuit`,
+      description: p.shortDesc, nuits_minimum: p.minNights,
+      lien: `/properties/${p.slug}`,
+    })),
+  };
+}
+
+// --- GET UPSELL SUGGESTIONS ---
+async function getUpsellSuggestions(args: {
+  property_slug: string;
+  context?: string;
+  guests?: number;
+}) {
+  const contextToCategories: Record<string, string[]> = {
+    romantique:   ['bien-etre', 'culinaire'],
+    famille:      ['excursion', 'loisir', 'culinaire'],
+    groupe_amis:  ['loisir', 'excursion', 'culinaire'],
+    affaires:     ['transport'],
+    luxe:         ['bien-etre', 'culinaire', 'transport'],
+    aventure:     ['excursion', 'loisir'],
+    detente:      ['bien-etre', 'culinaire'],
+  };
+
+  const categories = args.context
+    ? (contextToCategories[args.context] || ['bien-etre', 'excursion', 'culinaire'])
+    : ['bien-etre', 'excursion', 'culinaire'];
+
+  const extras = await prisma.extra.findMany({
+    where: { available: true, category: { in: categories } },
+    select: {
+      id: true, name: true, category: true, description: true,
+      price: true, priceUnit: true, duration: true, maxPersons: true,
+    },
+    orderBy: { sortOrder: 'asc' },
+    take: 3,
+  });
+
+  if (extras.length === 0) {
+    return { message: 'Aucun extra disponible pour le moment.', extras: [] };
+  }
+
+  const pitches: Record<string, string> = {
+    romantique:  'Pour rendre ce séjour encore plus inoubliable',
+    famille:     'Pour que toute la famille profite au maximum',
+    groupe_amis: 'Pour des souvenirs mémorables entre amis',
+    luxe:        'Pour une expérience d\'exception',
+    detente:     'Pour un ressourcement complet',
+    aventure:    'Pour pousser l\'aventure encore plus loin',
+  };
+
+  return {
+    pitch: pitches[args.context || ''] || 'Pour enrichir votre séjour',
+    extras: extras.map(e => ({
+      id: e.id, nom: e.name, categorie: e.category,
+      description: e.description,
+      prix: `${e.price} MAD/${e.priceUnit}`,
+      duree: e.duration, max_personnes: e.maxPersons,
+    })),
+    message_commercial: 'Ces expériences sont très appréciées par nos clients. Souhaitez-vous en ajouter une ?',
+  };
+}
+
+// =============================================
+// TOOLS ADMIN
+// =============================================
+
+// --- GET ADMIN DASHBOARD ---
+async function getAdminDashboard() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+
+  const [
+    newBookingsToday,
+    bookingsThisMonth,
+    pendingBookings,
+    openTickets,
+    urgentTickets,
+    revenueThisMonth,
+    activeProperties,
+    checkInsToday,
+    checkOutsToday,
+  ] = await Promise.all([
+    prisma.booking.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
+    prisma.booking.count({ where: { createdAt: { gte: monthStart, lt: nextMonthStart } } }),
+    prisma.booking.count({ where: { status: 'PENDING' } }),
+    prisma.ticket.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+    prisma.ticket.count({ where: { status: 'OPEN', priority: 'URGENT' } }),
+    prisma.booking.aggregate({
+      where: {
+        status: { in: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'] },
+        createdAt: { gte: monthStart, lt: nextMonthStart },
+      },
+      _sum: { totalAmount: true },
+    }),
+    prisma.property.count({ where: { status: 'ACTIVE' } }),
+    prisma.booking.count({ where: { checkIn: { gte: today, lt: tomorrow }, status: 'CONFIRMED' } }),
+    prisma.booking.count({ where: { checkOut: { gte: today, lt: tomorrow }, status: 'CHECKED_IN' } }),
+  ]);
+
+  const alertes: string[] = [];
+  if (urgentTickets > 0) alertes.push(`🚨 ${urgentTickets} ticket(s) URGENT(s) en attente`);
+  if (pendingBookings > 0) alertes.push(`⏳ ${pendingBookings} réservation(s) à confirmer`);
+  if (alertes.length === 0) alertes.push('✅ Aucune alerte en cours');
+
+  return {
+    date: today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }),
+    activite_du_jour: {
+      nouvelles_reservations: newBookingsToday,
+      arrivees_prevues: checkInsToday,
+      departs_prevus: checkOutsToday,
+    },
+    a_traiter: {
+      reservations_en_attente: pendingBookings,
+      tickets_ouverts: openTickets,
+      tickets_urgents: urgentTickets,
+    },
+    mois_en_cours: {
+      reservations: bookingsThisMonth,
+      chiffre_affaires: `${Number(revenueThisMonth._sum.totalAmount || 0).toLocaleString('fr-FR')} MAD`,
+    },
+    plateforme: { biens_actifs: activeProperties },
+    alertes,
+  };
+}
+
+// --- GET PENDING ITEMS ---
+async function getPendingItems(args: { type?: 'bookings' | 'tickets' | 'all' }) {
+  const type = args.type || 'all';
+  const result: any = {};
+
+  if (type === 'bookings' || type === 'all') {
+    const bookings = await prisma.booking.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        property: { select: { name: true } },
+        guest: { select: { firstName: true, lastName: true, email: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 10,
+    });
+
+    result.reservations_en_attente = bookings.map(b => ({
+      id: b.id,
+      client: `${b.guest.firstName} ${b.guest.lastName}`,
+      email: b.guest.email,
+      bien: b.property.name,
+      arrivee: b.checkIn.toISOString().split('T')[0],
+      depart: b.checkOut.toISOString().split('T')[0],
+      nuits: b.nights,
+      total: `${Number(b.totalAmount).toLocaleString('fr-FR')} MAD`,
+      en_attente_depuis: `${Math.floor((Date.now() - b.createdAt.getTime()) / (1000 * 60 * 60))}h`,
+    }));
+  }
+
+  if (type === 'tickets' || type === 'all') {
+    const tickets = await prisma.ticket.findMany({
+      where: { status: { in: ['OPEN', 'IN_PROGRESS'] } },
+      include: {
+        creator: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      take: 10,
+    });
+
+    result.tickets_ouverts = tickets.map(t => ({
+      id: t.id,
+      sujet: t.subject,
+      type: t.type,
+      priorite: t.priority,
+      statut: t.status,
+      client: `${t.creator.firstName} ${t.creator.lastName}`,
+      ouvert_depuis: `${Math.floor((Date.now() - t.createdAt.getTime()) / (1000 * 60 * 60))}h`,
+    }));
+  }
+
+  return result;
+}
+
+// --- UPDATE BOOKING STATUS ---
+async function updateBookingStatus(args: {
+  booking_id: string;
+  status: 'CONFIRMED' | 'CANCELLED';
+  reason?: string;
+}) {
+  const booking = await prisma.booking.findUnique({
+    where: { id: args.booking_id },
+    include: {
+      property: { select: { name: true } },
+      guest: { select: { firstName: true, lastName: true, email: true } },
+    },
+  });
+
+  if (!booking) return { error: `Réservation ${args.booking_id} introuvable.` };
+
+  await prisma.booking.update({
+    where: { id: args.booking_id },
+    data: {
+      status: args.status,
+      ...(args.reason ? { internalNotes: args.reason } : {}),
+    },
+  });
+
+  const label = args.status === 'CONFIRMED' ? 'confirmée' : 'annulée';
+
+  return {
+    succes: true,
+    message: `La réservation de ${booking.guest.firstName} ${booking.guest.lastName} pour "${booking.property.name}" a été ${label}.`,
+    reservation: {
+      id: booking.id,
+      client: `${booking.guest.firstName} ${booking.guest.lastName}`,
+      email: booking.guest.email,
+      bien: booking.property.name,
+      arrivee: booking.checkIn.toISOString().split('T')[0],
+      depart: booking.checkOut.toISOString().split('T')[0],
+      nouveau_statut: args.status,
+    },
   };
 }
