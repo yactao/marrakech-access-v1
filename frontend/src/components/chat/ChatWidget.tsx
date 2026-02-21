@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+import { api } from '@/lib/api';
 
 // Messages proactifs selon la page
 const proactiveMessages: Record<string, { delay: number; message: string }> = {
@@ -144,17 +143,7 @@ export default function ChatWidget() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch(`${API_URL}/api/chat`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ message: messageText, conversationId }),
-      });
-
-      const data = await res.json();
+      const { data } = await api.post('/chat', { message: messageText, conversationId });
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
       if (data.conversationId) setConversationId(data.conversationId);
     } catch {

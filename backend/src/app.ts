@@ -21,10 +21,12 @@ app.use(cookieParser());
 // CORS - liste blanche des origines autorisées
 app.use(cors({
   origin: (origin, callback) => {
-    // Autoriser les requêtes sans origin (curl, apps mobiles, etc.)
+    // Autoriser les requêtes sans origin (curl, apps mobiles, Postman, etc.)
     if (!origin) return callback(null, true);
     if (env.ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    callback(new Error(`Origine non autorisée par la politique CORS : ${origin}`));
+    // Refus propre : pas d'en-tête CORS → le navigateur bloque (pas de 500)
+    console.warn(`[CORS] Origine bloquée : ${origin}`);
+    callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
