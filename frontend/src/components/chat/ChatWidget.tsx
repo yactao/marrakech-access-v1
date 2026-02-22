@@ -262,6 +262,7 @@ export default function ChatWidget() {
   const [pulseButton, setPulseButton] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [browserWarning, setBrowserWarning] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(isOpen);
@@ -390,10 +391,18 @@ export default function ChatWidget() {
     window.speechSynthesis.speak(utt);
   };
 
+  const showWarning = (msg: string) => {
+    setBrowserWarning(msg);
+    setTimeout(() => setBrowserWarning(''), 4000);
+  };
+
   const toggleListening = () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      showWarning('🎤 Micro non supporté sur ce navigateur. Utilisez Chrome ou Edge.');
+      return;
+    }
 
     if (isListening) {
       recognitionRef.current?.stop();
@@ -610,7 +619,14 @@ export default function ChatWidget() {
             </div>
             {/* Toggle TTS */}
             <button
-              onClick={() => { setTtsEnabled((v) => !v); window.speechSynthesis?.cancel(); }}
+              onClick={() => {
+                if (!window.speechSynthesis) {
+                  showWarning('🔊 Synthèse vocale non supportée sur ce navigateur. Utilisez Chrome ou Edge.');
+                  return;
+                }
+                setTtsEnabled((v) => !v);
+                window.speechSynthesis.cancel();
+              }}
               title={ttsEnabled ? 'Couper la voix' : 'Activer la voix'}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                 ttsEnabled
@@ -709,6 +725,14 @@ export default function ChatWidget() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Avertissement navigateur */}
+          {browserWarning && (
+            <div className="mx-4 mb-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] flex items-center gap-2 flex-shrink-0">
+              <span className="flex-shrink-0">⚠️</span>
+              <span>{browserWarning}</span>
             </div>
           )}
 
