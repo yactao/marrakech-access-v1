@@ -260,9 +260,11 @@ export default function ChatWidget() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const [isTypingGreeting, setIsTypingGreeting] = useState(false);
   const [pulseButton, setPulseButton] = useState(true);
+  const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(isOpen);
+  const recognitionRef = useRef<any>(null);
   useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
 
   // Scroll auto
@@ -359,6 +361,42 @@ export default function ChatWidget() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleListening = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    recognition.onstart = () => setIsListening(true);
+
+    recognition.onresult = (e: any) => {
+      const transcript = Array.from(e.results as any[])
+        .map((r: any) => r[0].transcript)
+        .join('');
+      setInput(transcript);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      inputRef.current?.focus();
+    };
+
+    recognition.onerror = () => setIsListening(false);
+
+    recognition.start();
   };
 
   const handleChooseProperty = (data: any) => {
@@ -638,9 +676,25 @@ export default function ChatWidget() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder="Écrivez à Al..."
-                className="flex-1 bg-dark border border-white/10 rounded-full px-4 py-2.5 text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-gold/40 transition-colors"
+                placeholder={isListening ? 'Parlez maintenant...' : 'Écrivez à Al...'}
+                className={`flex-1 bg-dark border rounded-full px-4 py-2.5 text-sm text-white/80 placeholder:text-white/20 focus:outline-none transition-colors ${
+                  isListening ? 'border-red-500/50 placeholder:text-red-400/60' : 'border-white/10 focus:border-gold/40'
+                }`}
               />
+              {/* Bouton micro */}
+              <button
+                onClick={toggleListening}
+                title={isListening ? 'Arrêter' : 'Dicter'}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${
+                  isListening
+                    ? 'bg-red-500/20 border border-red-500/50 text-red-400 animate-pulse'
+                    : 'border border-white/10 text-white/30 hover:border-gold/30 hover:text-gold/60'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm6 9a1 1 0 0 1 2 0 8 8 0 0 1-7 7.93V20h2a1 1 0 0 1 0 2H9a1 1 0 0 1 0-2h2v-2.07A8 8 0 0 1 4 10a1 1 0 0 1 2 0 6 6 0 0 0 12 0z"/>
+                </svg>
+              </button>
               <button
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || loading}

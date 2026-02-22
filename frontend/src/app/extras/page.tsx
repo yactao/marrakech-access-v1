@@ -92,21 +92,11 @@ export default function ExtrasPage() {
             Chef à domicile, quad dans le désert, vol en montgolfière... Votre séjour, vos envies.
           </p>
 
-          <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
-            {cart.extras.length > 0 && (
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gold/10 border border-gold/20">
-                <span className="text-gold text-sm">🛒 {cart.extras.length} expérience{cart.extras.length > 1 ? 's' : ''} dans votre panier</span>
-              </div>
-            )}
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('chat:open', {
-                detail: { message: 'Bonjour Al, pouvez-vous me recommander des expériences adaptées à mon séjour ?' }
-              }))}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-white/50 hover:border-gold/30 hover:text-gold text-sm transition-all duration-300"
-            >
-              🎩 Demander à Al
-            </button>
-          </div>
+          {cart.extras.length > 0 && (
+            <div className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gold/10 border border-gold/20">
+              <span className="text-gold text-sm">🛒 {cart.extras.length} expérience{cart.extras.length > 1 ? 's' : ''} dans votre panier</span>
+            </div>
+          )}
         </div>
 
         {/* Onglets catégories */}
