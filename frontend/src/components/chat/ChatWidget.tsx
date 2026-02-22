@@ -261,11 +261,19 @@ export default function ChatWidget() {
   const [isTypingGreeting, setIsTypingGreeting] = useState(false);
   const [pulseButton, setPulseButton] = useState(true);
   const [isListening, setIsListening] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(isOpen);
   const recognitionRef = useRef<any>(null);
   useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
+
+  // Stopper la synthèse vocale quand on ferme le chat
+  useEffect(() => {
+    if (!isOpen && typeof window !== 'undefined') {
+      window.speechSynthesis?.cancel();
+    }
+  }, [isOpen]);
 
   // Scroll auto
   useEffect(() => {
@@ -353,6 +361,7 @@ export default function ChatWidget() {
         cards: data.cards || [],
       }]);
       if (data.conversationId) setConversationId(data.conversationId);
+      speak(data.reply);
     } catch {
       setMessages((prev) => [...prev, {
         role: 'assistant',
@@ -361,6 +370,24 @@ export default function ChatWidget() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const speak = (text: string) => {
+    if (!ttsEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const clean = text
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[#_`]/g, '')
+      .replace(/\n+/g, '. ');
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.lang = 'fr-FR';
+    utt.rate = 1.05;
+    const voices = window.speechSynthesis.getVoices();
+    const frVoice = voices.find((v) => v.lang.startsWith('fr'));
+    if (frVoice) utt.voice = frVoice;
+    window.speechSynthesis.speak(utt);
   };
 
   const toggleListening = () => {
@@ -581,6 +608,24 @@ export default function ChatWidget() {
                 Votre majordome • En ligne
               </p>
             </div>
+            {/* Toggle TTS */}
+            <button
+              onClick={() => { setTtsEnabled((v) => !v); window.speechSynthesis?.cancel(); }}
+              title={ttsEnabled ? 'Couper la voix' : 'Activer la voix'}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                ttsEnabled
+                  ? 'bg-gold/20 border border-gold/40 text-gold'
+                  : 'border border-white/20 text-white/50 hover:border-gold/30 hover:text-gold/70'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                {ttsEnabled
+                  ? <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                  : <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                }
+              </svg>
+            </button>
+
             {cart.propertyId && (
               <Link
                 href="/checkout"
